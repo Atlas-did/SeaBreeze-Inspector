@@ -1,0 +1,118 @@
+# =============================================================================
+# YOLO缺陷检测配置 — 模型路径、推理参数、缺陷类别
+# =============================================================================
+# 重要：编辑本文件时缩进必须用空格（不能用Tab），否则会解析失败
+# =============================================================================
+
+# --------------------------- 模型配置 ---------------------------
+model:
+  # YOLOv8预训练权重文件路径（相对项目根目录）
+  # 训练前使用 "yolov8n.pt"（Nano版，速度最快，适合笔记本CPU推理）
+  # 训练后替换为 "data/weights/best.pt"（自己训练的模型）
+  weights_path: "data/weights/yolov8n.pt"
+
+  # 配置文件路径（YOLO数据集配置，包含训练/验证集路径和类别定义）
+  # 训练前需根据实际数据集修改此文件
+  data_yaml_path: "data/processed/wind_turbine_defect.yaml"
+
+  # 输入图像尺寸（必须为32的倍数：320, 416, 640, 1280）
+  # 越大精度越高但推理越慢，笔记本CPU推荐640
+  input_size: 640
+
+  # 设备选择：cpu | cuda | mps
+  # cpu: 通用，适合笔记本
+  # cuda: NVIDIA GPU（Google Colab可用）
+  # mps: Apple Silicon GPU
+  device: "cpu"
+
+# --------------------------- 推理参数 ---------------------------
+inference:
+  # 置信度阈值（0.0-1.0），低于此值的检测框被丢弃
+  # 推荐值：0.4-0.6。值越高误检越少但漏检可能增加
+  conf_threshold: 0.45
+
+  # IoU阈值（0.0-1.0），用于NMS非极大值抑制
+  # 相邻检测框的IoU高于此值时保留置信度最高的
+  iou_threshold: 0.5
+
+  # 单帧最大检测框数量，防止过多误检
+  max_detections: 50
+
+  # 是否启用半精度推理（FP16），可提速约20%
+  # CPU环境下效果有限，建议仅在GPU时开启
+  half_precision: false
+
+# --------------------------- 缺陷类别定义 ---------------------------
+# 类别ID从0开始自动编号，顺序必须与训练数据集一致
+classes:
+  # 类别列表，每个类别包含名称和ID
+  definitions:
+    - id: 0
+      name: "crack"                    # 裂纹
+      description: "风机叶片表面裂纹，包括横向和纵向裂纹"
+      color: "#FF0000"                 # 可视化标注颜色（红色）
+      severity_weights: [1, 2, 3]      # 轻/中/重三级严重程度权重
+
+    - id: 1
+      name: "corrosion"                # 腐蚀
+      description: "叶片表面材料腐蚀、氧化或涂层脱落"
+      color: "#FFA500"                 # 橙色
+      severity_weights: [1, 2, 3]
+
+    - id: 2
+      name: "leading_edge_damage"      # 前缘损伤
+      description: "叶片前缘 erosion、开裂或材料缺损"
+      color: "#FFFF00"                 # 黄色
+      severity_weights: [2, 3, 4]      # 前缘损伤通常更严重
+
+  # 类别名称到中文的映射（用于报告和可视化）
+  name_mapping:
+    crack: "裂纹"
+    corrosion: "腐蚀"
+    leading_edge_damage: "前缘损伤"
+
+# --------------------------- 训练参数（仅训练模式使用） ---------------------------
+training:
+  # 训练轮数（epochs），数据集较小时建议200-300轮
+  epochs: 200
+
+  # 批大小（batch size），根据显存/GPU内存调整
+  # Colab免费T4 GPU推荐16，笔记本CPU推荐4-8
+  batch_size: 8
+
+  # 图像增强开关
+  augmentation:
+    hsv_h: 0.015    # HSV色调增强幅度
+    hsv_s: 0.7      # HSV饱和度增强幅度
+    hsv_v: 0.4      # HSV明度增强幅度
+    flip_ud: 0.0    # 上下翻转概率（叶片通常不对称，设为0）
+    flip_lr: 0.5    # 左右翻转概率
+    mosaic: 1.0     # Mosaic数据增强概率
+
+  # 优化器：SGD | Adam | AdamW
+  optimizer: "AdamW"
+
+  # 初始学习率
+  learning_rate: 0.001
+
+  # 模型保存频率（每N轮保存一次）
+  save_period: 20
+
+# --------------------------- 视频流推理配置 ---------------------------
+video_inference:
+  # 处理帧率（fps），限制过高帧率减少CPU负载
+  # Tello视频流约30fps，这里设为10-15fps做推理
+  target_fps: 10
+
+  # 每隔N帧做一次完整推理，中间帧用跟踪算法（可选）
+  # 设为1表示每帧都做推理，设为3表示每3帧推理一次
+  inference_interval: 2
+
+  # 是否在画面上叠加检测信息（类别、置信度、框）
+  draw_overlay: true
+
+  # 检测结果保存格式：json | csv | 不保存留空
+  save_format: "json"
+
+  # 检测结果保存目录
+  output_dir: "data/processed/detection_results"
