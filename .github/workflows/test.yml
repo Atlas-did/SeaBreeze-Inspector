@@ -24,6 +24,12 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Install system deps (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libsdl2-2.0-0 libsdl2-dev
+
       - name: Cache pip
         uses: actions/cache@v4
         with:
@@ -36,9 +42,15 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
 
-      - name: Run all tests
+      - name: Run tests (Ubuntu with xvfb for pygame)
+        if: runner.os == 'Linux'
         run: |
-          python -m pytest tests/ -v --tb=short --timeout=120
+          xvfb-run -a python -m pytest tests/ -v --tb=short
+
+      - name: Run tests (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          python -m pytest tests/ -v --tb=short
 
       - name: Test summary
         if: always()
