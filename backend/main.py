@@ -301,7 +301,7 @@ class MissionController:
                 dist_to_waypoint = np.linalg.norm(
                     self.current_pos - self.target_pos
                 )
-                if dist_to_waypoint < 30:  # 到达当前路径点
+                if dist_to_waypoint < self._cfg_val("flight.waypoint_reach_radius", 30):  # 到达当前路径点
                     self.path_idx += 1
                     print(
                         "[MAIN] 路径点 {}/{} 到达".format(
@@ -342,7 +342,7 @@ class MissionController:
 
             # 巡检完成后自动返航 (超时或手动触发)
             inspect_elapsed = time.time() - self._state_entry_time
-            if inspect_elapsed > 30:  # 30秒巡检超时
+            if inspect_elapsed > self._cfg_val("mission.inspect_timeout_s", 30):  # 30秒巡检超时
                 self.state = "RETURN"
                 self._state_entry_time = time.time()
                 print("[MAIN] 巡检超时, 开始返航")

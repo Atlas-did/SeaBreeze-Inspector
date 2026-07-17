@@ -61,6 +61,8 @@ class FailsafeMonitor:
     }
 
     def __init__(self):
+        # Copy class defaults per-instance to prevent cross-test leakage
+        self.THRESHOLDS = dict(self.THRESHOLDS)
         self._last_heartbeat = time.time()
         self._active_event: Optional[SafetyEvent] = None
         self._event_history: list[SafetyEvent] = []

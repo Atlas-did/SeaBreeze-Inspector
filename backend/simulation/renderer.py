@@ -354,7 +354,7 @@ def draw_telemetry_panel(surface, font, x, y, w, state):
             state.get("position", [0,0,0])[0],
             state.get("position", [0,0,0])[1],
             state.get("position", [0,0,0])[2])),
-        ("VEL", "[{:.1f}, {:.1f}, {:.1f}] cm/s".format(vel[0], vel[1], vel[2])),
+        ("VEL", "[{:.1f}, {:.1f}, {:.1f}]".format(vel[0], vel[1], vel[2])),
         ("ERROR", "[{:.0f}, {:.0f}, {:.0f}]".format(
             state.get("target", [0,0,0])[0] - pos[0],
             state.get("target", [0,0,0])[1] - pos[1],

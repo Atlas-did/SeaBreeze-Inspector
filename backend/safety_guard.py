@@ -27,6 +27,7 @@ class SafetyGuard:
     }
 
     def __init__(self):
+        self.THRESHOLDS = dict(self.THRESHOLDS)  # per-instance copy
         self._last_heartbeat = time.time()
         self._emergency_active = False
         self._emergency_reason = ""

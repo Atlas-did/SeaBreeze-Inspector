@@ -16,13 +16,13 @@ def parse_tello_state(raw_state: dict) -> dict:
         return {}
 
     # Tello SDK 状态字段: pitch roll yaw vgx vgy vgz templ temph tof h bat baro
-    # P1-E: vg* 单位是 dm/s (分米/秒), 需 ×10 转为 cm/s
+    # N12/P1-E: vg* 单位是 dm/s, 需 ×10 转为 cm/s
     vgx = float(raw_state.get("vgx", 0)) * 10   # dm/s → cm/s
     vgy = float(raw_state.get("vgy", 0)) * 10
     vgz = float(raw_state.get("vgz", 0)) * 10
 
     return {
-        "acceleration": np.array([vgx, vgy, vgz]),  # cm/s (速度差分近似)
+        "velocity_approx": np.array([vgx, vgy, vgz]),  # N12: 速度差分近似, 非真实加速度
         "velocity": np.array([vgx, vgy, vgz]),       # cm/s
         "height": float(raw_state.get("h", 0)),      # cm
         "battery": int(raw_state.get("bat", 0)),

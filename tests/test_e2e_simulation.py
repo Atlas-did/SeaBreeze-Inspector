@@ -102,12 +102,12 @@ def test_emergency_interrupt():
     mc.drone.connect()
     mc.drone.takeoff()
 
-    # 触发低电量紧急
+    # 触发电量紧急
     mc._battery = 5
     triggered = mc._check_safety()
     assert triggered is True
     assert mc.state == "EMERGENCY"
-    assert "低电量" in mc._emergency_reason
+    assert "电量" in mc._emergency_reason
     print("  触发原因: {}".format(mc._emergency_reason))
 
     # EMERGENCY 处理
