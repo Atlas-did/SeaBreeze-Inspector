@@ -17,11 +17,12 @@ import numpy as np
 class SafetyGuard:
     """安全守护"""
 
+    # 与 config/drone_config.yaml safety 段保持一致
     THRESHOLDS = {
-        "battery": 10,        # %
+        "battery": 20,        # %  (drone_config: low_battery_land_threshold)
         "attitude": 30,       # 度
-        "height": 500,        # cm
-        "wall_distance": 100, # cm
+        "height": 300,        # cm (drone_config: boundary.z_max)
+        "wall_distance": 100, # cm (drone_config: near_wall_min_distance)
         "timeout": 1.0,       # 秒
     }
 

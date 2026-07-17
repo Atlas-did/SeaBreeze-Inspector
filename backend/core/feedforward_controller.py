@@ -210,12 +210,38 @@ class FeedforwardController:
         self._was_saturated = False
 
     @classmethod
-    def from_config(cls, config) -> "FeedforwardController":
-        """从配置对象创建控制器"""
+    def from_config(cls, config=None) -> "FeedforwardController":
+        """从 drone_config.yaml 加载控制器参数
+
+        用法:
+            ctrl = FeedforwardController.from_config()          # 自动加载 config
+            ctrl = FeedforwardController.from_config(cfg_obj)   # 传入 Config 对象
+        """
+        if config is None:
+            try:
+                from backend.utils.config import ConfigLoader
+                config = ConfigLoader.load("drone_config")
+            except Exception:
+                config = None
+
+        # 辅助函数: 安全取嵌套属性
+        def _get(cfg, path, default):
+            if cfg is None:
+                return default
+            try:
+                keys = path.split(".")
+                val = cfg
+                for k in keys:
+                    val = getattr(val, k)
+                return val
+            except (AttributeError, KeyError):
+                return default
+
         return cls(
-            Kp=getattr(config, "Kp", 2.0),
-            Ki=getattr(config, "Ki", 0.1),
-            Kd=getattr(config, "Kd", 1.0),
-            Kff=getattr(config, "Kff", -1.0),
-            dt=getattr(config, "dt", 0.1),
+            Kp=_get(config, "controller.Kp", 2.0),
+            Ki=_get(config, "controller.Ki", 0.1),
+            Kd=_get(config, "controller.Kd", 1.0),
+            Kff=-1.0,
+            dt=_get(config, "flight.hover_stabilize_time", 2.0) / 20.0,
+            max_speed=_get(config, "flight.max_speed", 50),
         )

@@ -30,6 +30,30 @@ flight:
   max_single_move: 50
   # 悬停稳定等待时间（秒），到达目标位置后等待此时间再执行下一步
   hover_stabilize_time: 2.0
+  # 控制循环频率 (Hz), dt = 1/control_rate_hz
+  control_rate_hz: 10
+
+# --------------------------- 任务参数 ---------------------------
+mission:
+  # 巡检超时 (秒), INSPECT 超过此时间自动 RETURN
+  inspect_timeout_s: 30
+  # 路径点到达判定半径 (cm)
+  waypoint_reach_radius: 30
+  # 起飞完成判定余量 (cm), 高度差 < 此值视为到达悬停高度
+  takeoff_done_margin: 20
+
+# --------------------------- 控制器参数 ---------------------------
+controller:
+  # 比例增益 — 越大响应越快但越容易震荡
+  Kp: 2.0
+  # 积分增益 — 消除稳态误差，过大会导致积分饱和
+  Ki: 0.1
+  # 微分增益 — 抑制超调，对噪声敏感
+  Kd: 1.0
+  # D项低通滤波截止频率 (Hz), 抑制高频噪声放大 (0=禁用)
+  d_cutoff_hz: 20
+  # 积分分离阈值 (cm), 误差超过此值冻结 I 项
+  integral_separation: 50
 
 # --------------------------- 安全边界 ---------------------------
 safety:
@@ -56,6 +80,18 @@ safety:
   # 低电量自动降落阈值（百分比）
   low_battery_land_threshold: 20
 
+  # 分层安全级别 (对应 mission/safety.py FailsafeMonitor)
+  tiers:
+    battery_warn:  20   # %  WARN 级别
+    battery_land:  10   # %  LAND 级别
+    battery_kill:   5   # %  KILL 级别
+    attitude_land: 30   # 度 LAND 级别
+    attitude_kill: 60   # 度 KILL 级别
+    height_land:   300  # cm LAND 级别
+    height_kill:   500  # cm KILL 级别
+    timeout_land:  1.0  # s  LAND 级别
+    timeout_kill:  3.0  # s  KILL 级别
+
 # --------------------------- IMU噪声参数（用于EKF） ---------------------------
 # 这些值描述Tello内置IMU传感器的噪声特性，用于卡尔曼滤波器的R矩阵
 # 数值越大表示对传感器数据越不信任
@@ -68,6 +104,10 @@ imu_noise:
   optical_flow_noise_std: 2.0
   # 气压计高度噪声标准差（cm），影响垂直位置估计
   barometer_noise_std: 10.0
+  # IMU 零偏漂移率 (m/s² per step), 模拟温度漂移
+  accel_bias_drift: 0.001
+  # IMU 随机游走标准差 (m/s²), 低频噪声累积
+  accel_random_walk: 0.005
 
 # --------------------------- 控制模式 ---------------------------
 mode:
@@ -79,3 +119,22 @@ mode:
 
   # 调试模式开关，开启后在控制台打印详细日志
   debug: true
+
+# --------------------------- 仿真参数 ---------------------------
+simulation:
+  # 风扰动
+  wind:
+    base_x: 0.05    # N, X方向基础风力
+    base_y: 0.02    # N, Y方向基础风力
+    frequency: 0.5  # Hz, 阵风频率
+    gust_amplitude: 0.03  # N, 阵风幅值
+
+  # 风机塔筒
+  turbine:
+    radius: 3.0     # m, 塔筒半径
+    height: 30.0    # m, 塔筒高度
+
+  # 电池消耗
+  battery:
+    hover_drain: 1.5   # %/s, 悬停时电池消耗速率
+    idle_drain: 0.1    # %/s, 待机时电池消耗速率

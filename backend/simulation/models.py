@@ -76,6 +76,10 @@ class Quadrotor3D:
     def set_position(self, pos):
         self.state[0:3] = np.asarray(pos)
 
+    def set_velocity(self, vel):
+        """直接设置速度 (用于键盘控制)"""
+        self.state[3:6] = np.asarray(vel)
+
 
 class WindDisturbance:
     """风扰动模型 — 正弦波动 + 阵风"""
@@ -99,10 +103,17 @@ class RobotArm3DOF:
     关节角: [theta1, theta2, theta3] (度)
     """
 
-    def __init__(self, L1=60, L2=50, L3=40):
-        self.L1 = L1  # mm
-        self.L2 = L2
-        self.L3 = L3
+    def __init__(self, L1=None, L2=None, L3=None):
+        # P2-L: 连杆长度从 arm_config.yaml 读取 (单源权威)
+        if L1 is None or L2 is None or L3 is None:
+            try:
+                from backend.arm.arm_kinematics import L1 as _L1, L2 as _L2, L3 as _L3
+                L1, L2, L3 = _L1, _L2, _L3
+            except Exception:
+                L1, L2, L3 = 55, 45, 35
+        self.L1 = float(L1)  # mm — 权威来源: arm_config.yaml
+        self.L2 = float(L2)
+        self.L3 = float(L3)
         self.angles = np.array([90.0, 90.0, 45.0])  # 默认姿态
         self.base_offset = np.array([0.0, 0.0, -0.05])  # 相对无人机底部, 单位m
 
@@ -145,24 +156,56 @@ class WindTurbine:
 
 
 class VirtualSensor:
-    """虚拟传感器 — 读取仿真状态并加噪声"""
+    """虚拟传感器 — 增强噪声模型: 高斯 + 零偏漂移 + 随机游走 (对标 gym-pybullet-drones)
 
-    def __init__(self, imu_noise=0.05, opt_noise=2.0, bar_noise=10.0):
-        self.imu_noise = imu_noise  # m/s²
-        self.opt_noise = opt_noise  # cm
-        self.bar_noise = bar_noise  # cm
+    噪声模型:
+      - 高斯白噪声 (测量噪声)
+      - 零偏 (bias): 缓慢漂移, 模拟温度/振动引起的传感器偏移
+      - 随机游走 (random walk): 低频噪声累积, 模拟 MEMS 传感器特性
+    """
 
-    def read_imu(self, quad: Quadrotor3D):
-        """读取IMU (加速度, m/s²)"""
-        return quad.get_acceleration() + np.random.normal(0, self.imu_noise, 3)
+    def __init__(self, imu_noise=0.05, opt_noise=2.0, bar_noise=10.0,
+                 bias_drift_rate=0.001, rw_std=0.005):
+        self.imu_noise = imu_noise       # m/s², 高斯噪声标准差
+        self.opt_noise = opt_noise       # cm
+        self.bar_noise = bar_noise       # cm
+        self.bias_drift_rate = bias_drift_rate  # 零偏漂移率 (m/s² per step)
+        self.rw_std = rw_std             # 随机游走标准差 (m/s²)
+
+        # 内部状态
+        self._accel_bias = np.zeros(3)       # 零偏 (缓慢漂移)
+        self._accel_rw = np.zeros(3)         # 随机游走累积
+
+    def _step_bias_rw(self, dt: float = 0.1):
+        """更新零偏漂移和随机游走 (每帧调用)"""
+        # 零偏: 随机缓慢漂移
+        self._accel_bias += np.random.normal(0, self.bias_drift_rate, 3)
+        # 限幅: bias 不超过 0.2 m/s²
+        self._accel_bias = np.clip(self._accel_bias, -0.2, 0.2)
+        # 随机游走: 白噪声积分
+        self._accel_rw += np.random.normal(0, self.rw_std, 3) * dt
+        # 限幅: random walk 不超过 0.5 m/s²
+        self._accel_rw = np.clip(self._accel_rw, -0.5, 0.5)
+
+    def read_imu(self, quad: Quadrotor3D, dt: float = 0.1):
+        """读取IMU (加速度, cm/s²) — 含噪声+零偏+随机游走"""
+        from backend.utils.units import mps2_to_cmps2
+        self._step_bias_rw(dt)
+        truth = quad.get_acceleration()
+        noise = (np.random.normal(0, self.imu_noise, 3) +
+                 self._accel_bias +
+                 self._accel_rw)
+        return mps2_to_cmps2(truth + noise)
 
     def read_optical(self, quad: Quadrotor3D):
-        """读取光流位置"""
-        return quad.get_position()[:2] * 100 + np.random.normal(0, self.opt_noise, 2)  # m→cm
+        """读取光流位置 (cm)"""
+        from backend.utils.units import m_to_cm
+        return m_to_cm(quad.get_position()[:2]) + np.random.normal(0, self.opt_noise, 2)
 
     def read_barometer(self, quad: Quadrotor3D):
-        """读取气压计高度"""
-        return quad.get_position()[2] * 100 + np.random.normal(0, self.bar_noise)  # m→cm
+        """读取气压计高度 (cm)"""
+        from backend.utils.units import m_to_cm
+        return m_to_cm(quad.get_position()[2]) + np.random.normal(0, self.bar_noise)
 
     def read_all(self, quad: Quadrotor3D):
         """读取全部传感器"""

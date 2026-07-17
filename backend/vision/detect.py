@@ -12,7 +12,7 @@ import numpy as np
 
 
 class DefectDetector:
-    """YOLO缺陷检测器"""
+    """YOLO缺陷检测器 — 参数优先从 yolo_config.yaml 读取"""
 
     DEFECT_NAMES = {0: "crack", 1: "corrosion", 2: "leading_edge_damage"}
     DEFECT_COLORS = {
@@ -23,11 +23,29 @@ class DefectDetector:
 
     def __init__(
         self,
-        model_path: str = "yolov8n.pt",
-        conf_threshold: float = 0.45,
-        device: str = "cpu",
+        model_path: str = None,
+        conf_threshold: float = None,
+        device: str = None,
         mock: bool = False,
     ):
+        # 从 yolo_config.yaml 加载默认参数
+        if model_path is None or conf_threshold is None or device is None:
+            try:
+                from backend.utils.config import ConfigLoader
+                ycfg = ConfigLoader.load("yolo_config")
+                if model_path is None:
+                    model_path = str(ycfg["model"]["weights_path"])
+                if conf_threshold is None:
+                    conf_threshold = float(ycfg["inference"]["conf_threshold"])
+                if device is None:
+                    device = str(ycfg["model"]["device"])
+            except Exception:
+                if model_path is None:
+                    model_path = "data/weights/yolov8n.pt"
+                if conf_threshold is None:
+                    conf_threshold = 0.45
+                if device is None:
+                    device = "cpu"
         self.model_path = model_path
         self.conf_threshold = conf_threshold
         self.device = device
@@ -70,22 +88,24 @@ class DefectDetector:
         return detections
 
     def _mock_detect(self, image: np.ndarray) -> List[Dict]:
-        """模拟检测: 在图像上随机生成检测框"""
+        """模拟检测: 在图像上随机生成检测框 (P1-F: 用帧hash确保不同帧结果不同)"""
         h, w = image.shape[:2]
         import random
-        random.seed(42)
-        n_det = random.randint(0, 3)
+        # 每帧用独立种子, 帧间有变化, 帧内可复现
+        frame_seed = hash(image.tobytes()) % 100000 + 42
+        rng = random.Random(frame_seed)
+        n_det = rng.randint(0, 3)
         detections = []
         for i in range(n_det):
-            x1 = random.randint(0, w - 100)
-            y1 = random.randint(0, h - 100)
-            cls_id = random.choice([0, 1, 2])
+            x1 = rng.randint(0, max(10, w - 100))
+            y1 = rng.randint(0, max(10, h - 100))
+            cls_id = rng.choice([0, 1, 2])
             detections.append({
                 "class_id": cls_id,
-                "class_name": self.DEFECT_NAMES[cls_id],
-                "confidence": round(random.uniform(0.5, 0.95), 3),
-                "bbox": [x1, y1, x1 + random.randint(50, 150), y1 + random.randint(30, 100)],
-                "severity": random.choice(["light", "moderate", "severe"]),
+                "class_name": self.DEFECT_NAMES.get(cls_id, "unknown"),
+                "confidence": round(rng.uniform(0.5, 0.95), 3),
+                "bbox": [x1, y1, x1 + rng.randint(50, 150), y1 + rng.randint(30, 100)],
+                "severity": rng.choice(["light", "moderate", "severe"]),
             })
         return detections
 
@@ -127,29 +147,30 @@ class MockBladeDefectDetector(DefectDetector):
         self.device = device
         self.model = None
         self.mock = True
-        self.DEFECT_NAMES = {0: "crack", 1: "corrosion", 2: "stain"}
+        self.DEFECT_NAMES = {0: "crack", 1: "corrosion", 2: "leading_edge_damage"}
         self.DEFECT_COLORS = {
             "crack": (0, 0, 255),
             "corrosion": (0, 140, 255),
-            "stain": (0, 255, 255),
+            "leading_edge_damage": (0, 255, 255),
         }
 
     def detect(self, image: np.ndarray) -> List[Dict]:
         """模拟检测, 返回标准化格式的检测结果"""
         h, w = image.shape[:2]
         import random
-        random.seed(hash(image.tobytes()) % 10000)
-        n_det = random.randint(0, 4)
+        # P1-F/5.4: 用固定种子 + frame hash 确保同一帧结果一致, 不同帧结果不同
+        _rng = random.Random(hash(image.tobytes()) % 10000 + 42)
+        n_det = _rng.randint(0, 4)
         detections = []
         for i in range(n_det):
             x1 = random.randint(10, max(20, w - 120))
             y1 = random.randint(10, max(20, h - 120))
-            bw = random.randint(40, min(120, w - x1))
-            bh = random.randint(30, min(100, h - y1))
-            cls_name = random.choice(["crack", "corrosion", "stain"])
-            cls_id_map = {"crack": 0, "corrosion": 1, "stain": 2}
+            bw = _rng.randint(40, min(120, w - x1))
+            bh = _rng.randint(30, min(100, h - y1))
+            cls_name = _rng.choice(["crack", "corrosion", "leading_edge_damage"])
+            cls_id_map = {"crack": 0, "corrosion": 1, "leading_edge_damage": 2}
             cls_id = cls_id_map.get(cls_name, 0)
-            conf = round(random.uniform(0.5, 0.98), 2)
+            conf = round(_rng.uniform(0.5, 0.98), 2)
             detections.append({
                 "class_id": cls_id,
                 "class_name": cls_name,

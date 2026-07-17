@@ -119,20 +119,20 @@ def test_threshold_boundaries():
     print("[TEST] 阈值边界")
     guard = SafetyGuard()
 
-    # 恰好等于阈值10% 电池
-    assert guard.check({"battery": 10, "attitude": [0, 0, 0], "height": 100}), \
-        "恰好等于阈值应安全 (battery=10% >= 10%)"
+    # 恰好等于阈值 20% 电池
+    assert guard.check({"battery": 20, "attitude": [0, 0, 0], "height": 100}), \
+        "恰好等于阈值应安全 (battery=20% >= 20%)"
     # 低于阈值
-    assert not guard.check({"battery": 9, "attitude": [0, 0, 0], "height": 100}), \
-        "低于阈值应触发 (battery=9% < 10%)"
+    assert not guard.check({"battery": 19, "attitude": [0, 0, 0], "height": 100}), \
+        "低于阈值应触发 (battery=19% < 20%)"
 
     guard.reset()
 
-    # 恰好等于高度阈值500cm
-    assert guard.check({"battery": 80, "attitude": [0, 0, 0], "height": 500}), \
-        "恰好等于高度阈值应安全 (height=500 <= 500)"
-    assert not guard.check({"battery": 80, "attitude": [0, 0, 0], "height": 501}), \
-        "超过高度阈值应触发 (height=501 > 500)"
+    # 恰好等于高度阈值 300cm
+    assert guard.check({"battery": 80, "attitude": [0, 0, 0], "height": 300}), \
+        "恰好等于高度阈值应安全 (height=300 <= 300)"
+    assert not guard.check({"battery": 80, "attitude": [0, 0, 0], "height": 301}), \
+        "超过高度阈值应触发 (height=301 > 300)"
 
     guard.reset()
 

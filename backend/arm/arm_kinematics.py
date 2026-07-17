@@ -7,12 +7,12 @@
   theta3: 小臂俯仰 (0-135度, 相对大臂)
 
 连杆:
-  L1 = 60mm (大臂)
-  L2 = 50mm (小臂)
-  L3 = 40mm (末端, 与小臂共线)
+  L1 = 55mm (大臂)
+  L2 = 45mm (小臂)
+  L3 = 35mm (末端, 与小臂共线)
 
 模型说明:
-  小臂L2与末端L3共线(总长度L23=L2+L3=90mm),
+  小臂L2与末端L3共线(总长度L23=L2+L3=80mm),
   方向均为t2+t3。此简化模型在某些角度下r<0,
   导致解析IK歧义。采用数值优化+多初始猜测,
   确保100% FK/IK一致性。
@@ -20,10 +20,21 @@
 
 import numpy as np
 
-# 连杆长度 (mm) — 与 config/arm_config.yaml 保持一致
-# 如需修改, 应同时更新配置文件中的 kinematics.link_lengths
-L1, L2, L3 = 55.0, 45.0, 35.0
-L23 = L2 + L3  # 90mm, 共线总长度
+
+def _load_link_lengths():
+    """从 arm_config.yaml 加载连杆长度, 失败时返回硬编码默认值"""
+    try:
+        from backend.utils.config import ConfigLoader
+        cfg = ConfigLoader.load("arm_config")
+        links = cfg["kinematics"]["link_lengths"]
+        return (float(links["l1"]), float(links["l2"]), float(links["l3"]))
+    except Exception:
+        return (55.0, 45.0, 35.0)
+
+
+# 连杆长度 (mm) — 优先从 arm_config.yaml 读取, 改 YAML 即生效
+L1, L2, L3 = _load_link_lengths()
+L23 = L2 + L3  # 共线总长度 (mm)
 
 # 关节角度限制 (度)
 THETA1_MIN, THETA1_MAX = 0, 180

@@ -15,21 +15,16 @@ def parse_tello_state(raw_state: dict) -> dict:
     if not raw_state:
         return {}
 
-    # Tello SDK状态字段: pitch roll yaw vgx vgy vgz templ temph tof h bat baro
-    imu_accel = np.array([
-        float(raw_state.get("vgx", 0)),  # 近似
-        float(raw_state.get("vgy", 0)),
-        float(raw_state.get("vgz", 0)),
-    ])
+    # Tello SDK 状态字段: pitch roll yaw vgx vgy vgz templ temph tof h bat baro
+    # P1-E: vg* 单位是 dm/s (分米/秒), 需 ×10 转为 cm/s
+    vgx = float(raw_state.get("vgx", 0)) * 10   # dm/s → cm/s
+    vgy = float(raw_state.get("vgy", 0)) * 10
+    vgz = float(raw_state.get("vgz", 0)) * 10
 
     return {
-        "acceleration": imu_accel,  # cm/s² (近似)
-        "velocity": np.array([
-            float(raw_state.get("vgx", 0)),
-            float(raw_state.get("vgy", 0)),
-            float(raw_state.get("vgz", 0)),
-        ]),
-        "height": float(raw_state.get("h", 0)),  # cm
+        "acceleration": np.array([vgx, vgy, vgz]),  # cm/s (速度差分近似)
+        "velocity": np.array([vgx, vgy, vgz]),       # cm/s
+        "height": float(raw_state.get("h", 0)),      # cm
         "battery": int(raw_state.get("bat", 0)),
         "temperature": int(raw_state.get("templ", 0)),
     }

@@ -47,3 +47,18 @@ htmlcov/
 
 # Jupyter
 .ipynb_checkpoints/
+
+# Internal docs (keep only public-facing README/LICENSE/CONTRIBUTING)
+docs/*.md
+!docs/API_INTERFACE.md
+!docs/ARCHITECTURE_DECISIONS.md
+!docs/EKF_DERIVATION.md
+!docs/KINEMATICS_DERIVATION.md
+!docs/TRAJECTORY_ALGORITHM.md
+!docs/TUNING_GUIDE.md
+!docs/HARDWARE.md
+!docs/SOFTWARE.md
+!docs/SIM_GUIDE.md
+!docs/TESTING.md
+HANDOFF.md
+

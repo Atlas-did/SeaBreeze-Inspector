@@ -5,28 +5,62 @@
 import time
 
 import numpy as np
-import serial
 
 from backend.arm.arm_kinematics import FK, IK, L1, L2, L3
+
+# 从 arm_config.yaml 加载参数 (惰性加载, mock模式不触发)
+_arm_config_cache = None
+
+
+def _load_arm_config():
+    global _arm_config_cache
+    if _arm_config_cache is not None:
+        return _arm_config_cache
+    try:
+        from backend.utils.config import ConfigLoader
+        _arm_config_cache = ConfigLoader.load("arm_config")
+        return _arm_config_cache
+    except Exception:
+        _arm_config_cache = False
+        return None
 
 
 class ArmController:
     """机械臂控制器, 通过串口与Arduino Nano通信"""
 
-    def __init__(self, port: str = "", baudrate: int = 115200, timeout: float = 2.0):
+    def __init__(self, port: str = "", baudrate: int = None, timeout: float = 2.0):
+        # 从 arm_config.yaml 读取默认参数
+        cfg = _load_arm_config()
+        if baudrate is None and cfg:
+            try:
+                baudrate = cfg["hardware"]["serial"]["baudrate"]
+            except Exception:
+                baudrate = 115200
+        elif baudrate is None:
+            baudrate = 115200
+        if not port and cfg:
+            try:
+                port = str(cfg["hardware"]["serial"]["port"])
+            except Exception:
+                pass
+
         self.port = port
         self.baudrate = baudrate
         self.timeout = timeout
-        self.ser: serial.Serial | None = None
+        self.ser = None  # type: ignore
         self._current_angles = np.array([90.0, 90.0, 90.0])
 
     def connect(self) -> bool:
         """连接Arduino串口"""
         try:
+            import serial  # 延迟导入, mock模式不需要pyserial
             self.ser = serial.Serial(self.port, self.baudrate, timeout=self.timeout)
             time.sleep(2)  # 等待Arduino复位
             return True
-        except serial.SerialException as e:
+        except ImportError:
+            print("[ERR] pyserial未安装, 无法连接Arduino。安装: pip install pyserial")
+            return False
+        except Exception as e:
             print(f"[ERR] 串口连接失败: {e}")
             return False
 

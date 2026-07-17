@@ -141,10 +141,66 @@ def test_sinusoidal_disturbance():
     assert err_ff < err_no, "前馈应减小稳态误差"
 
 
+def test_pt1_filter():
+    """PT1 低通滤波: 阶跃响应"""
+    print("[TEST] PT1 低通滤波器")
+    from backend.core.filters import PT1Filter
+
+    f = PT1Filter(cutoff_hz=10.0, dt=0.01)
+
+    # 阶跃输入: 0→1.0
+    outputs = []
+    for _ in range(100):
+        outputs.append(f.update(1.0))
+
+    # 输出应逐渐接近 1.0
+    assert outputs[0] < 0.5, "初始输出应远小于 1.0"
+    assert outputs[-1] > 0.9, "最终输出应接近 1.0"
+    # 单调上升
+    assert all(outputs[i] <= outputs[i+1] for i in range(99))
+    print("  100步阶跃: init={:.3f}, final={:.3f}".format(outputs[0], outputs[-1]))
+    print("  [PASS]")
+
+
+def test_integral_separation():
+    """积分分离: 大误差时冻结积分"""
+    print("[TEST] 积分分离器")
+    from backend.core.filters import IntegralSeparator
+
+    sep = IntegralSeparator(threshold=50.0)
+    assert sep.should_integrate(10.0), "小误差应允许积分"
+    assert not sep.should_integrate(60.0), "大误差应冻结积分"
+    assert sep.is_frozen
+    # 恢复
+    assert sep.should_integrate(30.0), "误差回落后应恢复"
+    print("  [PASS]")
+
+
+def test_pt1_noise_suppression():
+    """PT1 对高频噪声的抑制"""
+    print("[TEST] PT1 噪声抑制")
+    import numpy as np
+    from backend.core.filters import PT1Filter
+
+    f = PT1Filter(cutoff_hz=5.0, dt=0.01)
+    noisy = np.sin(np.linspace(0, 200, 500)) + np.random.randn(500) * 0.5
+    filtered = np.array([f.update(x) for x in noisy])
+
+    # 滤波后方差应小于原噪声方差
+    orig_std = np.std(noisy[-200:])
+    filt_std = np.std(filtered[-200:])
+    assert filt_std < orig_std, "滤波后应更平滑"
+    print("  原始std={:.3f}, 滤波std={:.3f}".format(orig_std, filt_std))
+    print("  [PASS]")
+
+
 if __name__ == "__main__":
     print("=" * 50)
     print("  控制器测试套件")
     print("=" * 50)
     test_step_response()
     test_sinusoidal_disturbance()
-    print("\\n[OK] 所有测试通过!")
+    test_pt1_filter()
+    test_integral_separation()
+    test_pt1_noise_suppression()
+    print("\n[OK] 所有测试通过!")

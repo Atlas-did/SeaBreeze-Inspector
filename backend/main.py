@@ -21,6 +21,10 @@ from backend.safety_guard import SafetyGuard
 from backend.drone.tello_basic import TelloController, FlightState
 from backend.drone.tello_video import TelloVideoStream
 from backend.utils.logger import FlightLogger
+from backend.utils.config import ConfigLoader
+from backend.utils.bus import MessageBus, Message, create_message_bus
+from backend.utils.bus import TOPIC_MISSION_STATUS, TOPIC_DRONE_COMMAND
+from backend.mission.states import MissionState, can_transition
 
 
 # MissionController: 任务主调度器 (别名为兼容角色文档)
@@ -39,34 +43,53 @@ class MissionController:
       python backend/main.py --mode simulation --target "10,0,20"
     """
 
-    def __init__(self, mode: str = "simulation", mock: bool = True):
+    def __init__(self, mode: str = "simulation", mock: bool = True,
+                 config_dir: str = None):
         self.mode = mode  # "simulation" | "hardware"
         self.mock = mock
-        self.dt = 0.1  # 100ms控制周期
 
         # =====================================================================
-        # 子模块 — 算法层
+        # 加载配置 (P2-5: 代码真正读取config YAML)
+        # =====================================================================
+        try:
+            self.cfg = ConfigLoader.load("drone_config", config_dir=config_dir)
+            print("[MAIN] 已加载 drone_config.yaml")
+        except Exception as e:
+            print("[MAIN] 配置加载失败, 使用默认值: {}".format(e))
+            self.cfg = None
+
+        # 从配置读取参数, 配置缺失时回退到硬编码默认值
+        # P0-C: dt 从 control_rate_hz 计算, 默认 10Hz → 0.1s
+        rate = self._cfg_val("flight.control_rate_hz", 10)
+        self.dt = 1.0 / rate if rate > 0 else 0.1
+
+        # =====================================================================
+        # 子模块 — 算法层 (从配置读取参数)
         # =====================================================================
         self.ekf = DisturbanceObserverEKF(dt=self.dt)
-        self.controller = FeedforwardController(dt=self.dt)
+        self.controller = self._build_controller()
         self.planner = RRTStarPlanner()
         self.detector = DefectDetector(mock=mock)
 
         # =====================================================================
-        # 安全守护 (P0-1: 集成SafetyGuard)
+        # 安全守护 (P0-1: 集成SafetyGuard) — 从配置读取阈值
         # =====================================================================
-        self.safety_guard = SafetyGuard()
+        self.safety_guard = self._build_safety_guard()
 
         # =====================================================================
         # 无人机控制器 (P0-5: 组合TelloController)
         # =====================================================================
         self.drone = TelloController(mock=mock)
+        if self.mock:
+            # P0-D: mock模式自动连接, 避免TAKEOFF死锁
+            self.drone.connect()
 
         # =====================================================================
-        # 状态机 (P0-2: 完整6状态)
+        # 状态机 (P0-2: 完整8状态)
         # =====================================================================
         self.state = "IDLE"
-        self.target_pos = np.array([0.0, 0.0, 100.0])
+        default_hover = self._cfg_val("flight.default_hover_height", 100)
+        self.target_pos = np.array([0.0, 0.0, float(default_hover)])
         self.current_pos = np.zeros(3)
         self.current_vel = np.zeros(3)
         self.current_attitude = np.zeros(3)
@@ -77,6 +100,7 @@ class MissionController:
         self.path_idx = 0
 
         # 状态计时
+        self._last_detection_count = 0
         self._state_entry_time = time.time()
         self._hover_stabilize_start = 0.0
 
@@ -92,9 +116,53 @@ class MissionController:
         # 飞行日志 (P1-12: 集成FlightLogger)
         self.logger = FlightLogger()
 
+        # 消息总线 (Dashboard集成 — pub-sub 每条 topic 独立队列)
+        self.bus = create_message_bus()
+        self._cmd_sub = self.bus.subscribe(TOPIC_DRONE_COMMAND)
+        self._status_sub = self.bus.subscribe(TOPIC_MISSION_STATUS)  # 预留
+
         # 子线程控制
         self._running = False
         self._video_frame = None
+
+    # =========================================================================
+    # 配置辅助方法 (P2-5: 消除硬编码)
+    # =========================================================================
+
+    def _cfg_val(self, path: str, default):
+        """从配置读取嵌套值, 缺失时返回默认值"""
+        if self.cfg is None:
+            return default
+        try:
+            keys = path.split(".")
+            val = self.cfg
+            for k in keys:
+                val = getattr(val, k)
+            return val
+        except (AttributeError, KeyError):
+            return default
+
+    def _build_controller(self):
+        """从配置构建 FeedforwardController"""
+        return FeedforwardController(
+            Kp=self._cfg_val("controller.Kp", 2.0),
+            Ki=self._cfg_val("controller.Ki", 0.1),
+            Kd=self._cfg_val("controller.Kd", 1.0),
+            Kff=-1.0,  # 前馈补偿固定为负
+            dt=self.dt,
+            max_speed=self._cfg_val("flight.max_speed", 50),
+        )
+
+    def _build_safety_guard(self):
+        """从配置构建 SafetyGuard"""
+        guard = SafetyGuard()
+        guard.THRESHOLDS["battery"] = self._cfg_val(
+            "safety.low_battery_land_threshold", 20)
+        guard.THRESHOLDS["height"] = self._cfg_val(
+            "safety.boundary.z_max", 300)
+        guard.THRESHOLDS["wall_distance"] = self._cfg_val(
+            "safety.near_wall_min_distance", 100)
+        return guard
 
     # =========================================================================
     # 主循环
@@ -133,12 +201,17 @@ class MissionController:
         """单次控制循环"""
 
         # =====================================================================
-        # 1. 获取传感器数据
+        # 1. 处理 Dashboard 命令
+        # =====================================================================
+        self._process_bus_commands()
+
+        # =====================================================================
+        # 2. 获取传感器数据
         # =====================================================================
         z = self._get_sensor_data()
 
         # =====================================================================
-        # 2. EKF预测+更新 (传入已知控制输入以分离扰动估计)
+        # 3. EKF预测+更新 (传入已知控制输入以分离扰动估计)
         # =====================================================================
         self.ekf.predict(u=self._last_control_output)
         if z is not None:
@@ -150,34 +223,44 @@ class MissionController:
         disturbance = ekf_state["disturbance"]
 
         # =====================================================================
-        # 3. 更新视频帧 (P1-12: 从视频流获取)
+        # 4. 更新视频帧 (P1-12: 从视频流获取)
         # =====================================================================
         self._video_frame = self.video_stream.get_frame()
 
         # =====================================================================
-        # 4. 安全检查 (P0-1: SafetyGuard集成)
+        # 5. 安全检查 (P0-1: SafetyGuard集成)
         # =====================================================================
         if self._check_safety():
             self._log_frame(disturbance, [])  # 紧急状态也记录
             return  # 已触发紧急状态, 跳过正常控制
 
         # =====================================================================
-        # 5. 状态机处理 (P0-2: 完整6+1状态)
+        # 6. 状态机处理 (P0-2: 完整6+1状态)
         # =====================================================================
         detections = self._handle_state_machine(disturbance)
 
         # =====================================================================
-        # 6. 记录飞行日志 (P1-12)
+        # 7. 记录飞行日志 (P1-12)
         # =====================================================================
         self._log_frame(disturbance, detections if detections else [])
+
+        # =====================================================================
+        # 8. 发布状态到消息总线 (Dashboard集成)
+        # =====================================================================
+        # pub-sub: publish 到独立 topic, 不影响 Dashboard 命令通道
+        self.bus.publish(TOPIC_MISSION_STATUS, self.get_state_dict(), source="main")
 
     # =========================================================================
     # 状态机 (P0-2: 完整实现)
     # =========================================================================
 
     def _handle_state_machine(self, disturbance):
-        """处理当前状态的行为, 返回本轮检测结果列表"""
+        """处理当前状态的行为, 返回 (detections, control_output)
 
+        P0-B: controller.compute() 统一在此调用一次, 各状态处理器设置
+        self._pending_control 而非直接调用 _send_control()
+        """
+        self._pending_control = np.zeros(3)
         detections = []
 
         # ---------- IDLE: 等待指令 ----------
@@ -198,16 +281,11 @@ class MissionController:
 
         # ---------- HOVERING: 悬停等待 ----------
         elif self.state == "HOVERING":
-            # 维持当前位置悬停
-            control_output, _ = self.controller.compute(
-                self.target_pos,
-                self.current_pos,
-                disturbance_est=disturbance,
-                current_vel=self.current_vel,
+            # P0-B: 计算控制输出一次, 缓存待发送
+            self._pending_control, _ = self.controller.compute(
+                self.target_pos, self.current_pos,
+                disturbance_est=disturbance, current_vel=self.current_vel,
             )
-            self._send_control(control_output)
-
-            # 如果有规划好的路径, 自动进入导航
             if self.path is not None and self.path_idx < len(self.path):
                 self.state = "NAVIGATE"
                 print("[MAIN] 悬停→导航, 路径点数={}".format(len(self.path)))
@@ -227,14 +305,10 @@ class MissionController:
                         )
                     )
                 else:
-                    # 向路径点飞行
-                    control_output, _ = self.controller.compute(
-                        self.target_pos,
-                        self.current_pos,
-                        disturbance_est=disturbance,
-                        current_vel=self.current_vel,
+                    self._pending_control, _ = self.controller.compute(
+                        self.target_pos, self.current_pos,
+                        disturbance_est=disturbance, current_vel=self.current_vel,
                     )
-                    self._send_control(control_output)
             else:
                 # 路径走完, 进入巡检
                 self.state = "INSPECT"
@@ -244,13 +318,10 @@ class MissionController:
         # ---------- INSPECT: 巡检 + 缺陷检测 ----------
         elif self.state == "INSPECT":
             # 悬停在巡检点
-            control_output, _ = self.controller.compute(
-                self.target_pos,
-                self.current_pos,
-                disturbance_est=disturbance,
-                current_vel=self.current_vel,
+            self._pending_control, _ = self.controller.compute(
+                self.target_pos, self.current_pos,
+                disturbance_est=disturbance, current_vel=self.current_vel,
             )
-            self._send_control(control_output)
 
             # 缺陷检测
             if self._video_frame is not None:
@@ -274,16 +345,18 @@ class MissionController:
 
         # ---------- RETURN: 返航到起飞点 ----------
         elif self.state == "RETURN":
-            home = np.array([0.0, 0.0, 100.0])  # 起飞点上空100cm
+            # 从配置读取安全返航点 (默认起飞点上空100cm)
+            home = np.array([
+                self._cfg_val("safety.safe_point.x", 0),
+                self._cfg_val("safety.safe_point.y", 0),
+                self._cfg_val("safety.safe_point.z", 100),
+            ], dtype=float)
             self.target_pos = home
 
-            control_output, _ = self.controller.compute(
-                self.target_pos,
-                self.current_pos,
-                disturbance_est=disturbance,
-                current_vel=self.current_vel,
+            self._pending_control, _ = self.controller.compute(
+                self.target_pos, self.current_pos,
+                disturbance_est=disturbance, current_vel=self.current_vel,
             )
-            self._send_control(control_output)
 
             # 到达返航点后降落
             if np.linalg.norm(self.current_pos - home) < 30:
@@ -312,7 +385,31 @@ class MissionController:
                 self.state = "IDLE"
                 print("[MAIN] 紧急降落完成")
 
-        return detections
+        # P0-B: 统一发送控制指令 (一帧只发一次)
+        self._send_control(self._pending_control)
+        self._last_detection_count = len(detections) if detections else 0
+        return detections, self._pending_control
+
+    # =========================================================================
+    # Dashboard 命令处理
+    # =========================================================================
+
+    def _process_bus_commands(self):
+        """处理来自 Dashboard 的命令消息 (pub-sub: 独立队列不竞争)"""
+        while True:
+            msg = self._cmd_sub.read_latest()
+            if msg is None:
+                break
+            if isinstance(msg.data, dict):
+                cmd = msg.data.get("command", "")
+                if cmd == "takeoff":
+                    self.takeoff()
+                elif cmd == "land":
+                    if self.state != "IDLE":
+                        self.request_state("LAND", "Dashboard降落")
+                        print("[MAIN] Dashboard: 降落指令")
+                elif cmd == "emergency":
+                    self.trigger_emergency("Dashboard紧急停止")
 
     # =========================================================================
     # 传感器数据获取
@@ -398,6 +495,51 @@ class MissionController:
         self._last_heartbeat = time.time()
         return False
 
+    def update_with_external_data(self, sensor_z, position, velocity, attitude):
+        """供仿真调用: 注入外部传感器数据并运行一帧控制循环
+
+        仿真器提供虚拟传感器数据, MissionController 运行完整的
+        EKF→安全检查→状态机→控制器→日志→消息总线 流水线。
+
+        返回: (control_output, state_dict)
+        """
+        self.current_pos = np.asarray(position, dtype=float)
+        self.current_vel = np.asarray(velocity, dtype=float)
+        self.current_attitude = np.asarray(attitude, dtype=float)
+
+        # EKF
+        self.ekf.predict(u=self._last_control_output)
+        if sensor_z is not None:
+            self.ekf.update(np.asarray(sensor_z, dtype=float))
+        ekf_state = self.ekf.get_state()
+        self.current_pos = ekf_state["position"]
+        self.current_vel = ekf_state["velocity"]
+        disturbance = ekf_state["disturbance"]
+
+        # 安全检查
+        if self._check_safety():
+            return np.zeros(3), self.get_state_dict()
+
+        # 状态机 (P0-B: compute 已在 _handle_state_machine 中调用一次, 此处复用)
+        detections, control_output = self._handle_state_machine(disturbance)
+
+        self._last_control_output = np.asarray(control_output, dtype=float)
+
+        # 日志
+        self._log_frame(disturbance, detections if detections else [])
+
+        # 消息总线
+        try:
+            self.bus.put(Message(
+                topic=TOPIC_MISSION_STATUS,
+                data=self.get_state_dict(),
+                source="main",
+            ), block=False)
+        except Exception:
+            pass
+
+        return control_output, self.get_state_dict()
+
     # =========================================================================
     # 公共接口
     # =========================================================================
@@ -435,11 +577,26 @@ class MissionController:
         return False
 
     def trigger_emergency(self, reason: str):
-        """触发紧急状态"""
+        """触发紧急状态 (直接进入 EMERGENCY, 不经过转换表校验)"""
         self._emergency_reason = reason
         self.state = "EMERGENCY"
         self._state_entry_time = time.time()
         print("[EMERGENCY] {}".format(reason))
+
+    def request_state(self, new_state: str, reason: str = "") -> bool:
+        """P1-C/3.3: 通过转换表校验后变更状态, 非法转换返回 False"""
+        try:
+            cur = MissionState[self.state]
+            nxt = MissionState[new_state]
+            if not can_transition(cur, nxt):
+                print("[WARN] 非法状态转换: {} → {} ({})".format(
+                    self.state, new_state, reason))
+                return False
+        except KeyError:
+            pass  # 未知状态允许直接设置 (兼容旧代码)
+        self.state = new_state
+        self._state_entry_time = time.time()
+        return True
 
     def stop(self):
         """优雅关闭 (P1-11): 降落→保存日志→停止线程→关闭连接"""
@@ -460,10 +617,8 @@ class MissionController:
         # 4. 保存飞行日志 (P1-12)
         self.logger.stop()
 
-        # 5. 断开硬件连接
-        if not self.mock and hasattr(self.drone, 'disconnect'):
-            # TelloController没有disconnect方法, 安全起见留空
-            pass
+        # 5. 停止消息总线
+        self.bus.stop()
 
         print("[MAIN] 优雅关闭完成")
 
@@ -486,12 +641,15 @@ class MissionController:
     def get_state_dict(self) -> dict:
         """返回完整状态字典 (供Dashboard/logging使用)"""
         return {
+            "flight_state": self.state,
             "state": self.state,
+            "battery": self._battery,
+            "height": float(self.current_pos[2]),
             "position": self.current_pos.tolist(),
             "velocity": self.current_vel.tolist(),
             "disturbance": self.ekf.get_disturbance().tolist(),
             "target": self.target_pos.tolist(),
-            "battery": self._battery,
+            "detection_count": self._last_detection_count,
             "emergency_reason": self._emergency_reason,
             "ekf_mahalanobis": float(self.ekf.mahalanobis_distance),
         }

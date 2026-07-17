@@ -29,7 +29,11 @@ from typing import Any, Dict, List, Optional, Tuple
 
 
 # 默认日志输出目录（相对项目根目录）
-DEFAULT_LOG_DIR: Path = Path(__file__).resolve().parents[2] / "data" / "processed" / "logs"
+try:
+    from backend.utils.config import PROJECT_ROOT
+    DEFAULT_LOG_DIR: Path = PROJECT_ROOT / "data" / "processed" / "logs"
+except ImportError:
+    DEFAULT_LOG_DIR: Path = Path(__file__).resolve().parents[2] / "data" / "processed" / "logs"
 
 
 @dataclass
@@ -40,9 +44,9 @@ class LogFrame:
     pos_x: float                   # 位置 X (cm)
     pos_y: float                   # 位置 Y (cm)
     pos_z: float                   # 位置 Z (cm)
-    dist_dx: float                 # 扰动估计 X (N)
-    dist_dy: float                 # 扰动估计 Y (N)
-    dist_dz: float                 # 扰动估计 Z (N)
+    dist_dx: float                 # 扰动估计 X (cm/s²)
+    dist_dy: float                 # 扰动估计 Y (cm/s²)
+    dist_dz: float                 # 扰动估计 Z (cm/s²)
     detection_count: int           # 检测框数量
     detections_json: str           # 检测框详情（JSON字符串）
     extra: str = ""                # 额外信息（JSON字符串，可选）
@@ -55,22 +59,23 @@ class FlightLogger:
     每帧记录以下信息:
         - 时间戳（精确到微秒）
         - 无人机位置 (x, y, z) cm
-        - 扰动估计值 (dx, dy, dz) N
+        - 扰动估计值 (dx, dy, dz) cm/s²
         - YOLO检测框（类别、置信度、坐标）
 
     输出格式: CSV（可直接用Excel打开分析）
     """
 
     # CSV列头定义
+    # P2-E: 扰动列标单位修正 N→cm/s²
     CSV_HEADERS = [
         "timestamp",
         "datetime",
         "pos_x_cm",
         "pos_y_cm",
         "pos_z_cm",
-        "disturbance_x_n",
-        "disturbance_y_n",
-        "disturbance_z_n",
+        "disturbance_x_cmps2",
+        "disturbance_y_cmps2",
+        "disturbance_z_cmps2",
         "detection_count",
         "detections_json",
         "extra",
@@ -124,7 +129,7 @@ class FlightLogger:
 
         参数:
             position: 无人机位置 (x, y, z)，单位 cm
-            disturbance: 扰动估计 (dx, dy, dz)，单位 N
+            disturbance: 扰动估计 (dx, dy, dz)，单位 cm/s²
             detections: YOLO检测结果列表，每项为字典
             extra: 任意额外数据字典（会被序列化为JSON）
         """
