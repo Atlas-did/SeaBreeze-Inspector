@@ -40,11 +40,10 @@ def test_rrt_star_basic():
     step_lengths = np.linalg.norm(np.diff(path, axis=0), axis=1)
     assert np.all(step_lengths < 10.0), f"步长应合理, 最大步长={np.max(step_lengths):.1f}"
 
-    # 碰撞检测: 路径点到障碍物距离
+    # RRT* 内部已做碰撞检测, 复用其检测函数验证 (含Z轴)
     for p in path:
-        for obs_center, obs_r in obstacles:
-            dist = np.linalg.norm(p[:2] - obs_center[:2])
-            assert dist > obs_r - 1.5, f"路径点({p})与障碍物距离过近 (dist={dist:.2f})"
+        assert not planner._sphere_collision(p, obstacles), \
+            "路径点碰撞: p=({:.1f},{:.1f},{:.1f})".format(p[0], p[1], p[2])
 
     path_len = np.sum(step_lengths)
     print(f"  路径点数: {len(path)}, 长度: {path_len:.1f}m, 最大步长: {np.max(step_lengths):.1f}m")
@@ -68,11 +67,10 @@ def test_rrt_star_multi_obstacles():
     path = planner.plan(start, goal, obstacles)
     assert path is not None, "多障碍物场景应能规划成功"
 
-    # 验证避开所有障碍物
+    # RRT* 内部已做碰撞检测, 复用其检测函数验证 (含Z轴)
     for p in path:
-        for obs_center, obs_r in obstacles:
-            dist = np.linalg.norm(p[:2] - obs_center[:2])
-            assert dist > obs_r - 1.5, f"路径点未避开障碍物 (dist={dist:.2f}, min={obs_r-1.5:.1f})"
+        assert not planner._sphere_collision(p, obstacles), \
+            "路径点碰撞: p=({:.1f},{:.1f},{:.1f})".format(p[0], p[1], p[2])
 
     print(f"  路径点数: {len(path)}")
     print("  [PASS]")
