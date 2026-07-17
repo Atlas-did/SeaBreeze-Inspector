@@ -17,7 +17,8 @@ from backend.core.disturbance_observer import DisturbanceObserverEKF
 from backend.core.feedforward_controller import FeedforwardController
 from backend.core.trajectory_planning import RRTStarPlanner
 from backend.vision.detect import DefectDetector
-from backend.safety_guard import SafetyGuard
+from backend.mission.safety import FailsafeMonitor, SafetyLevel
+from backend.drone.rc_manager import RCManager  # N3: 激活RC管理
 from backend.drone.tello_basic import TelloController, FlightState
 from backend.drone.tello_video import TelloVideoStream
 from backend.utils.logger import FlightLogger
@@ -75,6 +76,10 @@ class MissionController:
         # 安全守护 (P0-1: 集成SafetyGuard) — 从配置读取阈值
         # =====================================================================
         self.safety_guard = self._build_safety_guard()
+        # N3: RCManager — 20Hz持续发送 + 超时归零 (mock模式也创建以验证接口)
+        self.rc = RCManager(drone_controller=self.drone, mock=mock)
+        if not mock:
+            self.rc.start()
 
         # =====================================================================
         # 无人机控制器 (P0-5: 组合TelloController)
@@ -109,6 +114,7 @@ class MissionController:
 
         # 上一次的控制输出 (用于EKF predict时传入已知控制输入)
         self._last_control_output = np.zeros(3)
+        self._last_control_accel = np.zeros(3)  # N6: 真实加速度 (cm/s²) 供EKF预测
 
         # 视频流 (P1-12: 集成视频采集)
         self.video_stream = TelloVideoStream(tello_controller=self.drone, mock=mock)
@@ -154,15 +160,15 @@ class MissionController:
         )
 
     def _build_safety_guard(self):
-        """从配置构建 SafetyGuard"""
-        guard = SafetyGuard()
-        guard.THRESHOLDS["battery"] = self._cfg_val(
-            "safety.low_battery_land_threshold", 20)
-        guard.THRESHOLDS["height"] = self._cfg_val(
-            "safety.boundary.z_max", 300)
-        guard.THRESHOLDS["wall_distance"] = self._cfg_val(
-            "safety.near_wall_min_distance", 100)
-        return guard
+        """构建分层 FailsafeMonitor (N1: 替换旧SafetyGuard)"""
+        monitor = FailsafeMonitor()
+        # 三级阈值从 config 加载
+        monitor.THRESHOLDS["battery_warn"] = self._cfg_val("safety.battery_warn", 30)
+        monitor.THRESHOLDS["battery_land"] = self._cfg_val("safety.low_battery_land_threshold", 20)
+        monitor.THRESHOLDS["battery_kill"] = self._cfg_val("safety.battery_kill", 10)
+        monitor.THRESHOLDS["height_land"] = self._cfg_val("safety.boundary.z_max", 300)
+        monitor.THRESHOLDS["height_kill"] = self._cfg_val("safety.boundary.z_max", 400)
+        return monitor
 
     # =========================================================================
     # 主循环
@@ -476,23 +482,28 @@ class MissionController:
 
     def _check_safety(self) -> bool:
         """
-        安全检查 — 电池/姿态/高度/失联检测。
-        返回 True 表示触发了紧急状态。
+        N1修复: 分层Failsafe — WARN告警/LAND自动降落/KILL急停
+        返回 True 表示触发了 KILL 级紧急状态。
         """
-        if self.state == "EMERGENCY":
-            return True  # 已在紧急状态
-
-        state_dict = {
-            "battery": self._battery,
-            "attitude": self.current_attitude.tolist(),
-            "height": float(self.current_pos[2]),
-        }
-
-        if not self.safety_guard.check(state_dict):
-            self.trigger_emergency(self.safety_guard.emergency_reason)
+        # EMERGENCY 状态下允许状态机继续运行 (用于降落后的 IDLE 恢复)
+        event = self.safety_guard.check(
+            battery=int(self._battery),
+            attitude=self.current_attitude.tolist(),
+            height=float(self.current_pos[2]))
+        if event.level == SafetyLevel.WARN:
+            if not getattr(self, "_warned", False):
+                print("[SAFETY] {}".format(event.reason))
+                self._warned = True
+        elif event.level == SafetyLevel.LAND:
+            print("[SAFETY] {} — 自动降落".format(event.reason))
+            self.request_state("LAND", "安全: " + event.reason)
+        elif event.level == SafetyLevel.KILL:
+            if self.state != "EMERGENCY":
+                self.trigger_emergency(event.reason)
             return True
-
-        self._last_heartbeat = time.time()
+        if event.level == SafetyLevel.OK:
+            self._warned = False
+            self._last_heartbeat = time.time()
         return False
 
     def update_with_external_data(self, sensor_z, position, velocity, attitude):
@@ -507,8 +518,8 @@ class MissionController:
         self.current_vel = np.asarray(velocity, dtype=float)
         self.current_attitude = np.asarray(attitude, dtype=float)
 
-        # EKF
-        self.ekf.predict(u=self._last_control_output)
+        # EKF (N6: 仿真传真实加速度, 真机传 None)
+        self.ekf.predict(u=self._last_control_accel if self.mock else None)
         if sensor_z is not None:
             self.ekf.update(np.asarray(sensor_z, dtype=float))
         ekf_state = self.ekf.get_state()

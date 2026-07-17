@@ -1,40 +1,15 @@
 """
-=============================================================================
-前馈补偿控制器 — PID反馈 + 扰动前馈
-=============================================================================
+Feedforward PID Controller — PID feedback + disturbance feedforward compensation
 
-技术选型:
-  底层接口: send_rc_control速度指令 (模式B)
-    - 连续控制, 10Hz定时发送, 适合闭环跟踪
-    - 串级结构: 位置环输出速度指令 → Tello SDK
-    - WiFi延迟100-200ms用"低通滤波+预测补偿"策略
+Control law:
+    v_cmd = Kp*e + Ki*∫e + Kd*ė + Kff*d_est
 
-控制框图:
-                    ┌─────────┐
-  target_pos ──────→│  位置环  │ (PID)
-                    │  e→v_cmd │
-                    └────┬────┘
-                         v
-  ┌────────────────────────────────────────┐
-  │  v_cmd = Kp*e + Ki*∫e + Kd*ė + Kff*d │
-  │         + 前馈补偿(扰动估计)            │
-  └────────────────────────────────────────┘
-                         │
-                    ┌────┴────┐
-                    │  限幅    │ [-100, 100]
-                    └────┬────┘
-                         v
-                    ┌─────────┐
-  disturbance ──────→│  前馈项  │ Kff * d_est
-  (from EKF)        └────┬────┘
-                         │
-                    ┌────┴──────────┐
-                    │ send_rc_control │ → Tello
-                    │ (lr, fb, ud, 0) │
-                    └─────────────────┘
+Features:
+    - D-term PT1 low-pass filter (anti-noise)
+    - Integral separation (anti-windup)
+    - Output clamping + dead zone
 
-参数来源: config/drone_config.yaml
-=============================================================================
+Config source: config/drone_config.yaml
 """
 
 from __future__ import annotations
@@ -43,23 +18,22 @@ from typing import Dict, Optional, Tuple
 
 import numpy as np
 
+from backend.core.filters import PT1Filter, IntegralSeparator
+
 
 class FeedforwardController:
-    """
-    PID反馈 + 扰动前馈补偿控制器。
+    """PID feedback + disturbance feedforward compensation controller.
 
-    控制律:
-        v_cmd = Kp * e + Ki * ∫e + Kd * ė + Kff * d_est
+    v_cmd = Kp * e + Ki * ∫e + Kd * ė + Kff * d_est
 
-    其中:
-        e = target_pos - current_pos    (位置误差)
-        ∫e 为积分项 (累积误差)
-        ė = -current_vel                (误差变化率, 假设目标静止)
-        d_est = 扰动估计 (来自EKF)
-        v_cmd 为输出速度指令 (cm/s)
+    where:
+        e = target_pos - current_pos    (position error)
+        ∫e = integral of error
+        ė = -current_vel                (error derivative, assuming target stationary)
+        d_est = disturbance estimate from EKF
 
-    输出限幅: [-max_speed, max_speed] (默认±100 cm/s, 对应Tello SDK的±100)
-    死区: |e| < 2cm 时视为到位, 输出0
+    Output clamped to [-max_speed, max_speed] (default ±100 cm/s for Tello SDK).
+    Dead zone: |e| < dead_zone → output = 0.
     """
 
     def __init__(
@@ -71,23 +45,11 @@ class FeedforwardController:
         dt: float = 0.1,
         max_speed: float = 100.0,
         dead_zone: float = 2.0,
+        d_cutoff_hz: float = 0.0,          # D-term LPF cutoff (0=disabled)
+        integral_separation: float = 0.0,  # I-term freeze threshold (0=disabled)
         integral_limit: float = 50.0,
         enable_ff: bool = True,
     ) -> None:
-        """
-        初始化控制器。
-
-        参数:
-            Kp: 比例增益
-            Ki: 积分增益
-            Kd: 微分增益
-            Kff: 前馈增益 (扰动补偿系数, -1.0表示完全补偿: v_cmd -= d_est)
-            dt: 控制周期 (秒)
-            max_speed: 输出速度上限 (cm/s, Tello SDK范围为-100~100)
-            dead_zone: 死区阈值 (cm), |e|<dead_zone视为到位
-            integral_limit: 积分上限 (防止积分饱和)
-            enable_ff: 是否启用前馈补偿
-        """
         self.Kp = Kp
         self.Ki = Ki
         self.Kd = Kd
@@ -98,14 +60,20 @@ class FeedforwardController:
         self.integral_limit = integral_limit
         self.enable_ff = enable_ff
 
-        # 积分项 (3维: x, y, z)
         self.integral = np.zeros(3)
-
-        # 上一步误差 (用于微分计算)
         self.prev_error = np.zeros(3)
-
-        # 上一步是否饱和 (用于积分抗饱和)
         self._was_saturated = False
+
+        # D-term low-pass filter (suppresses high-frequency noise)
+        self._d_filter = (
+            PT1Filter(cutoff_hz=d_cutoff_hz, dt=dt)
+            if d_cutoff_hz > 0 else None
+        )
+        # Integral separator (freezes I when error is large)
+        self._i_separator = (
+            IntegralSeparator(threshold=integral_separation)
+            if integral_separation > 0 else None
+        )
 
     def compute(
         self,
@@ -114,27 +82,22 @@ class FeedforwardController:
         disturbance_est: Optional[np.ndarray] = None,
         current_vel: Optional[np.ndarray] = None,
     ) -> Tuple[np.ndarray, Dict]:
-        """
-        计算控制输出。
+        """Compute control output.
 
-        参数:
-            target_pos: 目标位置 (3维, cm)
-            current_pos: 当前位置 (3维, cm)
-            disturbance_est: 扰动估计 (3维, cm/s²), 来自EKF
-            current_vel: 当前速度 (3维, cm/s), 用于微分项
+        Args:
+            target_pos: target position (3D, cm)
+            current_pos: current position (3D, cm)
+            disturbance_est: disturbance estimate from EKF (3D, cm/s²)
+            current_vel: current velocity (3D, cm/s)
 
-        返回:
+        Returns:
             (control_output, info_dict)
-            - control_output: 速度指令 (3维, cm/s), 已限幅
-            - info_dict: 调试信息字典
         """
         target_pos = np.asarray(target_pos, dtype=float)
         current_pos = np.asarray(current_pos, dtype=float)
-
-        # 1. 计算位置误差
         error = target_pos - current_pos
 
-        # 2. 死区处理: 误差<2cm视为已到位
+        # Dead zone
         if np.linalg.norm(error) < self.dead_zone:
             return np.zeros(3), {
                 "error": error,
@@ -144,49 +107,50 @@ class FeedforwardController:
                 "total_output": np.zeros(3),
             }
 
-        # 3. PID项计算
-        # 比例项: Kp * e
+        # Proportional term
         P_term = self.Kp * error
 
-        # 积分项: Ki * ∫e (梯形积分)
+        # Integral term (trapezoidal, with anti-windup)
         if not self._was_saturated:
-            # 抗饱和: 只有输出未饱和时才累加积分
             self.integral += error * self.dt
-            # 积分限幅
             self.integral = np.clip(
                 self.integral, -self.integral_limit, self.integral_limit
             )
         I_term = self.Ki * self.integral
+        # Integral separation: freeze when error exceeds threshold
+        if (self._i_separator is not None
+                and not self._i_separator.should_integrate(float(np.linalg.norm(error)))):
+            I_term = np.zeros(3)
 
-        # 微分项: Kd * ė = Kd * (-vel) (假设目标速度为0)
+        # Derivative term: Kd * (-vel), with optional PT1 low-pass
         if current_vel is not None:
             vel = np.asarray(current_vel, dtype=float)
             D_term = -self.Kd * vel
+            if self._d_filter is not None:
+                D_term = np.array(
+                    [self._d_filter.update(float(v)) for v in D_term]
+                )
         else:
-            # 用误差差分近似
             D_term = self.Kd * (error - self.prev_error) / self.dt
 
         pid_output = P_term + I_term + D_term
 
-        # 4. 前馈补偿项: Kff * d_est
+        # Feedforward: Kff * d_est
         ff_output = np.zeros(3)
         if self.enable_ff and disturbance_est is not None:
             d_est = np.asarray(disturbance_est, dtype=float)
             ff_output = self.Kff * d_est
 
-        # 5. 总输出
         total_output = pid_output + ff_output
 
-        # 6. 输出限幅
+        # Output clamping (preserves direction)
         output_norm = np.linalg.norm(total_output)
         if output_norm > self.max_speed:
-            # 等比例缩放, 保持方向不变
             total_output = total_output * (self.max_speed / output_norm)
             self._was_saturated = True
         else:
             self._was_saturated = False
 
-        # 保存误差用于下一步微分
         self.prev_error = error.copy()
 
         info = {
@@ -200,22 +164,25 @@ class FeedforwardController:
             "dead_zone_active": False,
             "saturated": self._was_saturated,
         }
-
         return total_output, info
 
     def reset(self) -> None:
-        """重置控制器状态 (积分项、误差历史)"""
+        """Reset controller state (integral, error history, filters)."""
         self.integral = np.zeros(3)
         self.prev_error = np.zeros(3)
         self._was_saturated = False
+        if self._d_filter is not None:
+            self._d_filter.reset(0.0)
+        if self._i_separator is not None:
+            self._i_separator = type(self._i_separator)(self._i_separator.threshold)
 
     @classmethod
     def from_config(cls, config=None) -> "FeedforwardController":
-        """从 drone_config.yaml 加载控制器参数
+        """Load controller params from drone_config.yaml.
 
-        用法:
-            ctrl = FeedforwardController.from_config()          # 自动加载 config
-            ctrl = FeedforwardController.from_config(cfg_obj)   # 传入 Config 对象
+        Usage:
+            ctrl = FeedforwardController.from_config()
+            ctrl = FeedforwardController.from_config(cfg_object)
         """
         if config is None:
             try:
@@ -224,7 +191,6 @@ class FeedforwardController:
             except Exception:
                 config = None
 
-        # 辅助函数: 安全取嵌套属性
         def _get(cfg, path, default):
             if cfg is None:
                 return default
@@ -242,6 +208,8 @@ class FeedforwardController:
             Ki=_get(config, "controller.Ki", 0.1),
             Kd=_get(config, "controller.Kd", 1.0),
             Kff=-1.0,
-            dt=_get(config, "flight.hover_stabilize_time", 2.0) / 20.0,
+            dt=1.0 / _get(config, "flight.control_rate_hz", 10),
             max_speed=_get(config, "flight.max_speed", 50),
+            d_cutoff_hz=_get(config, "controller.d_cutoff_hz", 0.0),
+            integral_separation=_get(config, "controller.integral_separation", 0.0),
         )

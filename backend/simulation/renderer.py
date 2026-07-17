@@ -433,7 +433,7 @@ def draw_arm_panel(surface, font, x, y, w, h, arm_angles, endpoint):
     ep_t = font.render("ENDEFF: {}".format(endpoint), True, WHITE)
     surface.blit(ep_t, (x + 12, ep_y))
 
-    keys_t = font.render("[<- ->]Base [^ v]Arm", True, PANEL_FG)
+    keys_t = font.render("Ctrl+<- -> Base  Ctrl+^ v Arm", True, PANEL_FG)
     surface.blit(keys_t, (x + 12, ep_y + 20))
     shift_t = font.render("+Shift: fast", True, PANEL_FG)
     surface.blit(shift_t, (x + 12, ep_y + 38))

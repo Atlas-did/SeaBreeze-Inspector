@@ -93,7 +93,9 @@ class Simulation:
         )
         self.arm = RobotArm3DOF()
         self.turbine = WindTurbine(
-            center_xy=(float(t["radius"]), 0.0),
+            # N8: 风机位置从config读取 (有position字段用position, 否则fallback)
+            center_xy=(float(t.get("position", [t["radius"], 0.0])[0]),
+                       float(t.get("position", [t["radius"], 0.0])[1])),
             radius=float(t["radius"]),
             height=float(t["height"]),
         )
@@ -329,7 +331,7 @@ class Simulation:
             "ekf_mahalanobis": self.mc.ekf.mahalanobis_distance,
             "target": self.mc.target_pos.tolist(),
             "arm_angles": "[{:.0f}, {:.0f}, {:.0f}]".format(*self.arm.angles),
-            "arm_endpoint": "[{:.1f}, {:.1f}, {:.1f}]".format(*self.arm.get_endpoint()),
+            "arm_endpoint": "[{:.0f}, {:.0f}, {:.0f}] mm".format(*(np.array(self.arm.get_endpoint()) * 1000)),
             "path_length": len(self.path) if self.path else 0,
             "fps": self.clock.get_fps(),
             "emergency_reason": self.mc._emergency_reason,
@@ -391,7 +393,7 @@ class Simulation:
         draw_arm_panel(self.screen, self.font_sm,
                        cam_x, arm_panel_y, self.CAMERA_W, 160,
                        self.arm.angles,
-                       "[{:.0f}, {:.0f}, {:.0f}]".format(*self.arm.get_endpoint()))
+                       "[{:.0f}, {:.0f}, {:.0f}]".format(*np.array(self.arm.get_endpoint()) * 1000))  # m→mm
 
         pygame.display.flip()
 
