@@ -76,15 +76,13 @@ class MissionController:
         # 安全守护 (P0-1: 集成SafetyGuard) — 从配置读取阈值
         # =====================================================================
         self.safety_guard = self._build_safety_guard()
-        # N3: RCManager — 20Hz持续发送 + 超时归零 (mock模式也创建以验证接口)
-        self.rc = RCManager(drone_controller=self.drone, mock=mock)
-        if not mock:
-            self.rc.start()
-
         # =====================================================================
         # 无人机控制器 (P0-5: 组合TelloController)
         # =====================================================================
         self.drone = TelloController(mock=mock)
+        self.rc = RCManager(drone_controller=self.drone, mock=mock)
+        if not mock:
+            self.rc.start()
         if self.mock:
             # P0-D: mock模式自动连接, 避免TAKEOFF死锁
             self.drone.connect()
