@@ -1,0 +1,119 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  width: 100%; height: 100%;
+  overflow: hidden;
+  background: #0a1420;
+  font-family: "Consolas", monospace;
+  color: #d0e8ff;
+}
+
+#app { position: fixed; inset: 0; }
+#app canvas { display: block; }
+
+/* ---------- 面板通用 ---------- */
+.panel {
+  position: fixed;
+  background: rgba(10, 25, 40, 0.82);
+  border: 1px solid rgba(100, 200, 255, 0.35);
+  border-radius: 8px;
+  padding: 12px 14px;
+  backdrop-filter: blur(4px);
+  z-index: 10;
+  font-size: 13px;
+}
+.panel h3 {
+  font-size: 13px;
+  letter-spacing: 2px;
+  color: #64c8ff;
+  border-bottom: 1px solid rgba(100, 200, 255, 0.3);
+  padding-bottom: 6px;
+  margin-bottom: 8px;
+}
+.panel .sub { font-size: 10px; color: #7fa8c8; letter-spacing: 0; }
+
+.row { display: flex; align-items: center; gap: 8px; margin: 5px 0; }
+.row .k { width: 62px; color: #7fa8c8; font-size: 11px; }
+.row .v { color: #d0e8ff; }
+.row .v.state { color: #4dd0a0; font-weight: bold; }
+.row .v.ok { color: #4dd0a0; }
+.row .v.warn { color: #ffb347; }
+
+.bar {
+  flex: 1; height: 10px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 5px; overflow: hidden;
+}
+.bar .fill {
+  height: 100%; width: 100%;
+  background: linear-gradient(90deg, #37c86e, #4dd0a0);
+  transition: width 0.3s, background 0.3s;
+}
+.bar .fill.low { background: linear-gradient(90deg, #c83737, #e05555); }
+
+/* ---------- 左栏 ---------- */
+#telemetry { left: 14px; top: 14px; width: 250px; }
+
+/* ---------- 机械臂面板 ---------- */
+#arm-panel { right: 14px; bottom: 52px; width: 320px; }
+.slider-row { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+.slider-row label { width: 58px; font-size: 12px; color: #7fa8c8; }
+.slider-row input[type=range] {
+  flex: 1; height: 6px; -webkit-appearance: none;
+  background: rgba(100,200,255,0.25); border-radius: 3px; outline: none;
+}
+.slider-row input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: #64c8ff; border: 2px solid #d0e8ff; cursor: pointer;
+}
+.slider-row .ang { width: 42px; text-align: right; color: #64c8ff; }
+.btn-row { display: flex; gap: 6px; margin: 10px 0 6px; }
+.btn-row button {
+  flex: 1; padding: 5px 0;
+  background: rgba(100,200,255,0.15);
+  color: #d0e8ff; border: 1px solid rgba(100,200,255,0.4);
+  border-radius: 5px; cursor: pointer; font-size: 12px;
+  font-family: inherit;
+}
+.btn-row button:hover { background: rgba(100,200,255,0.35); }
+.ee { border-top: 1px dashed rgba(100,200,255,0.25); padding-top: 6px; }
+
+/* ---------- 帮助栏 ---------- */
+#helpbar {
+  position: fixed; left: 0; right: 0; bottom: 0;
+  background: rgba(8, 18, 30, 0.9);
+  border-top: 1px solid rgba(100,200,255,0.25);
+  padding: 8px 16px; font-size: 12px; color: #9fc3e0;
+  z-index: 10; text-align: center;
+}
+#helpbar b { color: #64c8ff; }
+
+/* ---------- 标题 ---------- */
+#title-badge {
+  position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+  font-size: 14px; letter-spacing: 3px; color: rgba(160, 215, 255, 0.75);
+  z-index: 10; pointer-events: none;
+  text-shadow: 0 0 12px rgba(100, 200, 255, 0.5);
+}
+
+/* ---------- 急停闪烁 ---------- */
+body.emergency #t-state { color: #ff5555; animation: blink 0.5s infinite alternate; }
+@keyframes blink { from { opacity: 1; } to { opacity: 0.3; } }
+
+/* ---------- 高度条 ---------- */
+.hbar {
+  width: 12px; height: 80px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 3px; overflow: hidden;
+  position: relative;
+  border: 1px solid rgba(100,200,255,0.2);
+}
+.hbar .hfill {
+  position: absolute; bottom: 0; left: 0; width: 100%;
+  background: linear-gradient(0deg, #3788c8, #64c8ff);
+  transition: height 0.4s;
+  border-radius: 0 0 2px 2px;
+}
+#t-hgt { font-size: 10px; color: #7fa8c8; }
+.v.err { color: #ff4444 !important; }

@@ -1,0 +1,87 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SeaBreeze Inspector - 3D Inspection Sim</title>
+<link rel="stylesheet" href="css/style.css">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+<div id="app"></div>
+
+<!-- LEFT: Telemetry -->
+<div id="telemetry" class="panel">
+  <h3>TELEMETRY</h3>
+  <div class="row"><span class="k">STATE</span><span id="t-state" class="v state">IDLE</span></div>
+  <div class="row"><span class="k">BATT</span>
+    <div class="bar"><div id="t-batt-bar" class="fill"></div></div>
+    <span id="t-batt" class="v">100%</span></div>
+  <div class="row"><span class="k">POS</span><span id="t-pos" class="v">[0.0, 0.0, 0.0]</span></div>
+  <div class="row"><span class="k">VEL</span><span id="t-vel" class="v">[0.0, 0.0, 0.0]</span></div>
+  <div class="row"><span class="k">WIND</span><span id="t-wind" class="v">[0.00, 0.00]</span></div>
+  <div class="row"><span class="k">DIST</span><span id="t-dist" class="v">0.0 m</span></div>
+  <div class="row"><span class="k">TARGET</span><span id="t-target" class="v">--</span></div>
+  <div class="row"><span class="k">EKF</span><span id="t-ekf" class="v ok">D=0.0</span></div>
+  <div class="row"><span class="k">SAFETY</span><span id="t-safety-tier" class="v ok">NOMINAL</span></div>
+  <div class="row"><span class="k">FPS</span><span id="t-fps" class="v">60</span></div>
+</div>
+
+<!-- RIGHT TOP: Camera + Detections -->
+<div id="camera-panel" class="panel">
+  <h3>CAMERA <span class="sub">(YOLO Mock)</span></h3>
+  <div id="cam-view">
+    <canvas id="cam-canvas" width="300" height="220"></canvas>
+  </div>
+  <div id="det-log">
+    <div class="row det-title"><span class="k">DETECTIONS</span></div>
+    <div id="det-list"></div>
+  </div>
+</div>
+
+<!-- RIGHT BOTTOM: Arm Control -->
+<div id="arm-panel" class="panel">
+  <h3>ARM CONTROL <span class="sub">(3DOF)</span></h3>
+  <div class="slider-row">
+    <label>Base t1</label>
+    <input type="range" id="j0" min="0" max="180" value="90" step="1">
+    <span id="j0-v" class="ang">90 deg</span>
+  </div>
+  <div class="slider-row">
+    <label>Shoulder t2</label>
+    <input type="range" id="j1" min="15" max="165" value="90" step="1">
+    <span id="j1-v" class="ang">90 deg</span>
+  </div>
+  <div class="slider-row">
+    <label>Elbow t3</label>
+    <input type="range" id="j2" min="0" max="180" value="45" step="1">
+    <span id="j2-v" class="ang">45 deg</span>
+  </div>
+  <div class="btn-row">
+    <button data-preset="90,90,90">Home</button>
+    <button data-preset="90,90,0">Vertical</button>
+    <button data-preset="90,150,60">Reach</button>
+    <button data-preset="0,15,180">Limit</button>
+  </div>
+  <div class="row ee"><span class="k">END-EFF</span><span id="t-ee" class="v">[0, 0, 0] mm</span></div>
+</div>
+
+<!-- BOTTOM: Help Bar -->
+<div id="helpbar">
+  <b>[Space]</b> Fly/Land <b>[WASD]</b> Move <b>[PgUp/PgDn]</b> Up/Down
+  <b>[M]</b> Mission <b>[C]</b> Chase <b>[E]</b> Emergency <b>[R]</b> Reset
+  <b>[Arrows]</b> Arm <b>[Mouse]</b> Rotate/Zoom
+</div>
+
+<div id="title-badge">SeaBreeze Inspector - Offshore Wind UAV Inspection</div>
+
+<script type="module" src="js/main_api.js"></script>
+</body>
+</html>
