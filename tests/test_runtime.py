@@ -31,7 +31,7 @@ class TestSimRuntime:
     def test_takeoff_transition(self):
         rt = _make_runtime()
         rt.step(0.02, {'Space'})
-        assert rt._sim_state == 'TAKING_OFF'
+        assert rt.mc.state == 'TAKEOFF'  # 规范名 (非 TAKING_OFF)
 
     def test_takeoff_reaches_hover(self):
         rt = _make_runtime()
@@ -41,7 +41,7 @@ class TestSimRuntime:
             if data['state'] == 'HOVERING':
                 break
         assert data['state'] == 'HOVERING'
-        assert data['pos'][2] >= 1.0  # z-up: height at pos[2]
+        assert data['pos'][2] >= 0.9  # z-up: near hover height (EKF may lead physics by ~10cm)
 
     def test_emergency_descent(self):
         rt = _make_runtime()
@@ -49,13 +49,13 @@ class TestSimRuntime:
         for _ in range(200):
             rt.step(0.02, set())
         rt.step(0.02, {'KeyE'})
-        assert rt._sim_state == 'EMERGENCY'
+        assert rt.mc.state == 'EMERGENCY'
         for _ in range(200):
             data = rt.step(0.02, set())
             if data['state'] == 'IDLE':
                 break
         assert data['state'] == 'IDLE'
-        assert data['pos'][2] < 0.02  # near-zero (float precision)
+        assert data['pos'][2] < 0.05  # near ground (TOUCHDOWN_HEIGHT threshold)
 
     def test_reset_from_flight(self):
         rt = _make_runtime()
@@ -63,9 +63,11 @@ class TestSimRuntime:
         for _ in range(200):
             rt.step(0.02, set())
         rt.step(0.02, {'KeyR'})
-        assert rt._sim_state == 'IDLE'
+        # reset_mission triggers emergency → next frame EMERGENCY→IDLE
+        assert rt.mc.state in ('EMERGENCY', 'IDLE')
         data = rt.step(0.02, set())
-        assert data['pos'] == [0.0, 0.0, 0.0]
+        assert data['state'] == 'IDLE'
+        assert np.allclose(data['pos'], [0.0, 0.0, 0.0], atol=1e-3)
 
     def test_arm_control(self):
         rt = _make_runtime()
@@ -89,7 +91,7 @@ class TestSimRuntime:
                 break
         assert data['state'] == 'HOVERING'
         rt.step(0.02, {'KeyM'})
-        assert rt._sim_state == 'NAVIGATE'
+        assert rt.mc.state == 'NAVIGATE'
         for _ in range(400):
             data = rt.step(0.02, set())
             if data['state'] in ('INSPECT', 'RETURNING', 'LANDING', 'IDLE'):

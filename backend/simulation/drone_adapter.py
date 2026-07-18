@@ -28,6 +28,8 @@ class SimDroneAdapter(DroneInterface):
         self._battery = 100
         self._connected = False
         self._target_pos = np.zeros(3)
+        self._landing = False    # land() requested, waiting for physics touch-down
+        self._emergency = False  # emergency() requested, waiting for physics touch-down
 
     # ---- DroneInterface implementation ----
 
@@ -44,17 +46,29 @@ class SimDroneAdapter(DroneInterface):
         return True
 
     def land(self) -> bool:
-        self._flying = False
+        # Deferred: keep _flying=True so mc's LAND handler waits for physics
+        # touch-down. SimRuntime calls mark_landed() when pos[2] < threshold.
+        self._landing = True
         self._target_pos = self._quad.get_position().copy()
         self._target_pos[2] = 0.0
-        self._quad.set_velocity(np.zeros(3))
         return True
 
     def emergency(self) -> bool:
-        self._flying = False
-        self._quad.set_velocity(np.zeros(3))
-        self._quad.state[2] = 0.0
+        # Deferred: keep _flying=True so mc's EMERGENCY handler waits for physics
+        # touch-down. Do NOT zero velocity — SimRuntime's cascaded control handles
+        # the descent, and zeroing velocity every frame would freeze the quad in air.
+        self._emergency = True
         return True
+
+    def mark_landed(self) -> None:
+        """SimRuntime calls this when physics reaches ground (pos[2] ≈ 0).
+
+        This transitions _flying to False, allowing mc's LAND/EMERGENCY
+        handler to proceed to IDLE.
+        """
+        self._flying = False
+        self._landing = False
+        self._emergency = False
 
     def move_to(self, x: float, y: float, z: float, speed: int = 30) -> bool:
         """Move by relative offset (cm).

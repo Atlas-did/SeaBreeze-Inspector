@@ -34,16 +34,22 @@ class TestDroneInterfaceContract:
     def test_takeoff_fails_without_connect(self, drone):
         assert drone.takeoff() is False
 
-    def test_land_clears_flying(self, drone):
+    def test_land_defers_flying_clear(self, drone):
+        """land() defers is_flying=False until mark_landed() (physics touch-down)."""
         drone.connect()
         drone.takeoff()
         assert drone.land() is True
+        assert drone.is_flying is True, "land() should NOT instantly clear is_flying"
+        drone.mark_landed()
         assert drone.is_flying is False
 
-    def test_emergency_stops(self, drone):
+    def test_emergency_defers_flying_clear(self, drone):
+        """emergency() defers is_flying=False until mark_landed()."""
         drone.connect()
         drone.takeoff()
         assert drone.emergency() is True
+        assert drone.is_flying is True, "emergency() should NOT instantly clear is_flying"
+        drone.mark_landed()
         assert drone.is_flying is False
     
     def test_move_to_requires_flying(self, drone):

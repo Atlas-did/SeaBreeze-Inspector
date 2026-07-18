@@ -11,8 +11,6 @@ import os
 
 import sys
 
-import random as _random
-
 
 
 os.environ["SDL_IME_SHOW_UI"] = "0"
@@ -183,6 +181,10 @@ class Simulation:
 
             bar_noise=float(n["barometer_noise_std"]),
 
+            bias_drift_rate=float(n.get("accel_bias_drift", 0.001)),
+
+            rw_std=float(n.get("accel_random_walk", 0.005)),
+
         )
 
         self.arm = RobotArm3DOF()
@@ -206,6 +208,11 @@ class Simulation:
         # ---- FSM统一: 委托给MissionController (不再复制EKF/Controller/SafetyGuard) ----
 
         self.mc = MissionController(mode="simulation", mock=True)
+
+        # #6: 启动 mc 子系统 (logger + video_stream), 仿真路径不调 mc.start()
+        if not self.mc.logger.is_recording:
+            self.mc.logger.start_session()
+        self.mc.video_stream.start()
 
         # A5修复: 旧键 "timeout" 不存在于 FailsafeMonitor.THRESHOLDS
         # (真实键为 timeout_land/timeout_kill), A1 修复后 heartbeat 每帧调用, 无需放宽
@@ -253,6 +260,8 @@ class Simulation:
         # 检测模拟
 
         self._mock_detections = []
+
+        self._last_detection_time = 0.0  # #13: 时间触发检测更新
 
 
 
@@ -356,15 +365,15 @@ class Simulation:
 
             self._last_control = cmps_to_mps(ctrl_cmps)
 
-            # 5. 电池消耗
+            # 5. 电池消耗 (#7: 所有飞行状态都耗电, 不只是 HOVERING)
 
-            self.mc._battery -= dt * (
+            if self.mc.state not in ("IDLE", "EMERGENCY"):
 
-            self._battery_hover_drain if self.mc.state == "HOVERING"
+                self.mc.set_battery(self.mc.get_battery() - dt * self._battery_hover_drain)
 
-            else self._battery_idle_drain)
+            else:
 
-            self.mc._battery = max(0, self.mc._battery)
+                self.mc.set_battery(self.mc.get_battery() - dt * self._battery_idle_drain)
 
             # 7. 渲染
 
@@ -396,7 +405,8 @@ class Simulation:
 
             elif event.type == pygame.KEYDOWN:
 
-                if event.key in (pygame.K_LEFT, pygame.K_RIGHT, pygame.K_UP, pygame.K_DOWN):
+                if event.key in (pygame.K_LEFT, pygame.K_RIGHT, pygame.K_UP, pygame.K_DOWN,
+                                 pygame.K_LEFTBRACKET, pygame.K_RIGHTBRACKET):
 
                     self._handle_arm_keys(event)
 
@@ -406,9 +416,7 @@ class Simulation:
 
                 sc = getattr(event, "scancode", 0)
 
-                if event.key not in (pygame.K_LEFT, pygame.K_RIGHT, pygame.K_UP, pygame.K_DOWN):
-
-                    print("  [KEY] k={} s={} '{}'".format(event.key, sc, name))
+                # #11: 删除冗余的方向键判断 (已在上方 continue) 和噪音 print
 
                 self._keys_held.add(event.key)
 
@@ -476,7 +484,11 @@ class Simulation:
 
     def _do_land(self):
 
-        self.mc.request_state("LAND", "仿真降落")
+        # #26: 检查 request_state 返回值, 失败时 fallback 到 trigger_emergency
+
+        if not self.mc.request_state("LAND", "仿真降落"):
+
+            self.mc.trigger_emergency("仿真降落 fallback")
 
         self.quad.set_velocity(np.zeros(3))
 
@@ -492,7 +504,7 @@ class Simulation:
 
     def _handle_arm_keys(self, event):
 
-        """机械臂手动控制 — 方向键+Shift"""
+        """机械臂手动控制 — 方向键+Shift, [/] 控制肘关节"""
 
         delta = 5 if event.mod & pygame.KMOD_SHIFT else 1
 
@@ -512,31 +524,31 @@ class Simulation:
 
             self.arm.angles[1] = max(30, self.arm.angles[1] - delta)
 
+        elif event.key == pygame.K_LEFTBRACKET:  # #22: [ 键控制肘关节减小
+
+            self.arm.angles[2] = max(0, self.arm.angles[2] - delta)
+
+        elif event.key == pygame.K_RIGHTBRACKET:  # #22: ] 键控制肘关节增大
+
+            self.arm.angles[2] = min(135, self.arm.angles[2] + delta)
+
         self.arm.set_angles(self.arm.angles)
 
 
 
     def _do_reset(self):
 
-        # 重置直接设状态 (不经过转换表, reset 总是合法)
+        # #18: 用 mc.reset_mission() 公共方法, 不直接操作私有属性
 
-        self.mc.state = "IDLE"
+        # #10: 删除重复的 mc.ekf.reset() 调用
 
-        self.mc.ekf.reset()
-
-        self.mc.controller.reset()
-
-        self.mc.safety_guard.reset()
+        self.mc.reset_mission()
 
         self.quad.state[:] = 0.0
 
         self.quad.set_velocity(np.zeros(3))
 
         self._last_control = np.zeros(3)
-
-        self.mc._battery = 100.0
-
-        self.mc.ekf.reset()
 
         self._keys_held.clear()
 
@@ -671,26 +683,17 @@ class Simulation:
 
 
         # HUD (场景内)
+        # #15: 复用 mc.get_state_dict(), 追加 sim 专有字段 (不重复造轮子)
 
-        ekf_state = self.mc.ekf.get_state()
+        state_dict = self.mc.get_state_dict()
 
-        state_dict = {
+        state_dict.update({
 
-            "flight_state": self.mc.state,
-
-            "position": pos.tolist(),
+            "position": pos.tolist(),  # 用物理位置 (cm) 而非 EKF 估计
 
             "velocity": self.quad.get_velocity().tolist(),
 
-            "disturbance": ekf_state["disturbance"].tolist(),
-
-            "battery": int(self.mc._battery),
-
             "detection_count": len(self._mock_detections),
-
-            "ekf_mahalanobis": self.mc.ekf.mahalanobis_distance,
-
-            "target": self.mc.target_pos.tolist(),
 
             "arm_angles": "[{:.0f}, {:.0f}, {:.0f}]".format(*self.arm.angles),
 
@@ -700,9 +703,7 @@ class Simulation:
 
             "fps": self.clock.get_fps(),
 
-            "emergency_reason": self.mc._emergency_reason,
-
-        }
+        })
 
         # 中栏上方的HUD文字
 
@@ -750,9 +751,11 @@ class Simulation:
 
         if self.mc.state == "HOVERING" and dist_to_turbine < 2.0:
 
-            # 生成 mock 检测
+            # 生成 mock 检测 (#13: 时间触发, 不再绑定帧数)
 
-            if self._frame_count % 30 == 0:  # 每秒更新
+            if self._sim_time - self._last_detection_time > 1.0:
+
+                self._last_detection_time = self._sim_time
 
                 self._mock_detections = [
 
@@ -832,5 +835,17 @@ if __name__ == "__main__":
 
     sim = Simulation()
 
-    sim.run()
+    try:
+
+        sim.run()
+
+    except KeyboardInterrupt:
+
+        print("\n[SIM] 用户中断")
+
+    finally:
+
+        pygame.quit()  # #25: 保证 pygame 清理
+
+        print("[SIM] 仿真结束")
 

@@ -4,11 +4,24 @@
 
 Run: python backend/simulation/http_bridge.py
 Open: http://localhost:8811
+
+N5 修复: 所有模块级单例 (quad/mc/runtime/recorder/sim_thread/server) 移入 main()。
+         模块导入不再有副作用 (不创建文件、不启动线程、不连串口)。
+N7 修复: sim_loop 不再吞掉 KeyboardInterrupt/SystemExit。
 """
 
-import http.server, json, os, sys, threading, time, urllib.parse, traceback
+import http.server
+import json
+import os
+import sys
+import threading
+import time
+import urllib.parse
+import traceback
 import logging
+import atexit
 from logging.handlers import RotatingFileHandler
+
 import numpy as np
 
 _PROJ_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -19,9 +32,9 @@ from backend.simulation.models import Quadrotor3D, WindDisturbance, RobotArm3DOF
 from backend.main import MissionController
 from backend.runtime.loop import SimRuntime
 
-# ---- 双层日志: 事件层(sim_bridge.log) + 黑盒层(flight_*.csv) ----
+# ---- 日志配置 (模块级, 无副作用: 仅配置 logger, 不创建文件) ----
 _LOG_DIR = os.path.join(_PROJ_ROOT, "logs")
-os.makedirs(_LOG_DIR, exist_ok=True)
+os.makedirs(_LOG_DIR, exist_ok=True)  # 确保目录存在 (幂等, 不创建文件)
 
 logger = logging.getLogger("seabreeze.bridge")
 logger.setLevel(logging.INFO)
@@ -30,6 +43,11 @@ _fh = RotatingFileHandler(os.path.join(_LOG_DIR, "sim_bridge.log"),
 _fh.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
 logger.addHandler(_fh)
 logger.addHandler(logging.StreamHandler(sys.stdout))
+
+# ---- 常量 (模块级, 无副作用) ----
+KEY_TTL = 0.6  # 秒; 前端按住期间约每 80ms 刷新一次
+_STATIC_DIR = os.path.normpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "seabreeze-3d-sim"))
 
 
 class FlightRecorder:
@@ -40,6 +58,7 @@ class FlightRecorder:
     def __init__(self, log_dir, interval=0.1):
         self._interval = interval
         self._last = 0.0
+        os.makedirs(log_dir, exist_ok=True)
         path = os.path.join(log_dir, "flight_" + time.strftime("%Y%m%d_%H%M%S") + ".csv")
         self._f = open(path, "w", encoding="utf-8")
         self._f.write(self.COLUMNS)
@@ -62,89 +81,40 @@ class FlightRecorder:
         except Exception:
             pass
 
-
-recorder = FlightRecorder(_LOG_DIR)
-
-# ---- Shared state ----
-_state = {"pos": [0, 0, 0], "state": "IDLE", "battery": 100, "fps": 0}
-_lock = threading.Lock()
-# 按键表: key -> 最近一次刷新的时间戳 (TTL 过期自动释放, 防失焦卡键)
-_pending_keys = {}
-_key_lock = threading.Lock()
-KEY_TTL = 0.6  # 秒; 前端按住期间约每 80ms 刷新一次
-
-# ---- Backend objects ----
-quad = Quadrotor3D()
-wind = WindDisturbance(base_wind=np.array([0.08, 0.03, 0.05]), freq=0.3, gust_amp=0.06)
-arm = RobotArm3DOF()
-sensor = VirtualSensor()
-mc = MissionController(mode="simulation", mock=True)
-runtime = SimRuntime(mc, quad, wind, arm, sensor)
+    def close(self):
+        """N6 修复: 显式关闭文件, 注册到 atexit."""
+        if self._f:
+            try:
+                self._f.flush()
+                self._f.close()
+            except Exception:
+                pass
+            self._f = None
 
 
-def sim_loop():
-    """Background thread: run SimRuntime.step() at ~50Hz with real dt."""
-    global _state
-    fps_acc = 0.0
-    fps_n = 0
-    last_t = time.time()
-    last_log_n = len(runtime._flight_log)
+class BridgeContext:
+    """所有共享状态 — 替代模块级全局变量.
 
-    while True:
-        try:
-            t0 = time.time()
-            dt = min(0.05, t0 - last_t)  # 真实帧间隔, 物理时间不再漂移
-            last_t = t0
+    在 main() 中创建, 传递给 BridgeServer 和 sim_loop.
+    导入本模块不会创建任何实例。
+    """
 
-            now = time.time()
-            with _key_lock:
-                # TTL 过滤: 超过 KEY_TTL 未刷新的按键自动释放
-                keys = {k for k, ts in _pending_keys.items() if now - ts < KEY_TTL}
-                expired = [k for k, ts in _pending_keys.items() if now - ts >= KEY_TTL]
-                for k in expired:
-                    del _pending_keys[k]
-                    logger.info("key expired (TTL): %s", k)
-
-            data = runtime.step(dt, keys)
-            # Toggle keys are one-shot: consume after processing
-            for k in ("Space", "KeyR", "KeyE", "KeyM"):
-                if k in keys:
-                    with _key_lock:
-                        _pending_keys.pop(k, None)
-
-            # 事件层日志: 把 runtime flight_log 的新条目落盘
-            fl = runtime._flight_log
-            if len(fl) != last_log_n:
-                for entry in fl[last_log_n:]:
-                    logger.info("%s | %s", entry["event"], entry["detail"])
-                last_log_n = len(fl)
-
-            # 黑盒层: CSV 记录
-            recorder.record(data)
-
-            fps_acc += time.time() - t0
-            fps_n += 1
-            if fps_acc >= 0.5:
-                data["fps"] = round(fps_n / fps_acc)
-                fps_acc = 0.0
-                fps_n = 0
-            else:
-                data["fps"] = 0
-
-            with _lock:
-                _state = data
-
-            elapsed = time.time() - t0
-            time.sleep(max(0.001, 0.02 - elapsed))
-        except Exception:
-            logger.exception("[SIM-LOOP CRASH]")
-            traceback.print_exc()
-            time.sleep(0.5)
+    def __init__(self):
+        self.state = {"pos": [0, 0, 0], "state": "IDLE", "battery": 100, "fps": 0}
+        self.lock = threading.Lock()
+        self.pending_keys = {}
+        self.key_lock = threading.Lock()
+        self.recorder = None      # FlightRecorder, 在 main() 中创建
+        self.runtime = None       # SimRuntime, 在 main() 中创建
+        self.arm = None           # RobotArm3DOF, 在 main() 中创建
 
 
-# ---- HTTP Handler ----
-_STATIC_DIR = os.path.normpath(
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "seabreeze-3d-sim"))
+class BridgeServer(http.server.HTTPServer):
+    """携带 BridgeContext 的 HTTP server."""
+
+    def __init__(self, addr, handler_cls, ctx):
+        super().__init__(addr, handler_cls)
+        self.ctx = ctx
 
 
 class BridgeHandler(http.server.SimpleHTTPRequestHandler):
@@ -153,13 +123,17 @@ class BridgeHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=_STATIC_DIR, **kwargs)
 
+    @property
+    def ctx(self):
+        return self.server.ctx
+
     def do_GET(self):
         try:
             parsed = urllib.parse.urlparse(self.path)
 
             if parsed.path == "/api/state":
-                with _lock:
-                    self._json(200, dict(_state))
+                with self.ctx.lock:
+                    self._json(200, dict(self.ctx.state))
                 return
 
             if parsed.path == "/api/command":
@@ -170,22 +144,22 @@ class BridgeHandler(http.server.SimpleHTTPRequestHandler):
                         a0 = float(params.get("a0", [90])[0])
                         a1 = float(params.get("a1", [90])[0])
                         a2 = float(params.get("a2", [45])[0])
-                        arm.set_angles([a0, a1, a2])
+                        self.ctx.arm.set_angles([a0, a1, a2])
                     except Exception:
                         pass
                     self._json(200, {"ok": True})
                     return
                 if key:
-                    with _key_lock:
+                    with self.ctx.key_lock:
                         if key.endswith("_UP"):
-                            _pending_keys.pop(key[:-3], None)  # remove held key
+                            self.ctx.pending_keys.pop(key[:-3], None)
                         else:
-                            _pending_keys[key] = time.time()  # add/refresh TTL
+                            self.ctx.pending_keys[key] = time.time()
                 self._json(200, {"ok": True})
                 return
 
             if parsed.path == "/api/log":
-                self._json(200, _state.get("flight_log", []))
+                self._json(200, self.ctx.state.get("flight_log", []))
                 return
 
             super().do_GET()
@@ -225,22 +199,112 @@ class BridgeHandler(http.server.SimpleHTTPRequestHandler):
         pass  # suppress all log noise
 
 
-# ---- Signal the server is ready by printing ----
-sim_thread = threading.Thread(target=sim_loop, daemon=True, name="sim")
-sim_thread.start()
-time.sleep(0.3)
+def sim_loop(ctx):
+    """Background thread: run SimRuntime.step() at ~50Hz with real dt.
 
-_PORT = 8811
-print("", flush=True)
-print("=" * 60, flush=True)
-print("  SeaBreeze Inspector - HTTP Bridge v3 (SimRuntime)", flush=True)
-print(f"  Open: http://localhost:{_PORT}", flush=True)
-print("=" * 60, flush=True)
-print("  [Space] Takeoff/Land  [WASD] Move  [PgUp/PgDn] Up/Down", flush=True)
-print("  [M] Mission  [E] Emergency  [R] Reset  [Arrows] Arm", flush=True)
-print(f"  Logs: {_LOG_DIR}  (sim_bridge.log + flight_*.csv)", flush=True)
-print("=" * 60, flush=True)
-print("", flush=True)
+    N7 修复: KeyboardInterrupt/SystemExit 重抛, 不吞掉致命异常。
+    """
+    fps_acc = 0.0
+    fps_n = 0
+    last_t = time.time()
+    last_log_n = len(ctx.runtime._flight_log)
 
-server = http.server.HTTPServer(("127.0.0.1", _PORT), BridgeHandler)
-server.serve_forever()
+    while True:
+        try:
+            t0 = time.time()
+            dt = min(0.05, t0 - last_t)
+            last_t = t0
+
+            now = time.time()
+            with ctx.key_lock:
+                # TTL 过滤: 超过 KEY_TTL 未刷新的按键自动释放
+                keys = {k for k, ts in ctx.pending_keys.items() if now - ts < KEY_TTL}
+                expired = [k for k, ts in ctx.pending_keys.items() if now - ts >= KEY_TTL]
+                for k in expired:
+                    del ctx.pending_keys[k]
+                    logger.info("key expired (TTL): %s", k)
+
+            data = ctx.runtime.step(dt, keys)
+            # Toggle keys are one-shot: consume after processing
+            for k in ("Space", "KeyR", "KeyE", "KeyM"):
+                if k in keys:
+                    with ctx.key_lock:
+                        ctx.pending_keys.pop(k, None)
+
+            # 事件层日志: 把 runtime flight_log 的新条目落盘
+            fl = ctx.runtime._flight_log
+            if len(fl) != last_log_n:
+                for entry in fl[last_log_n:]:
+                    logger.info("%s | %s", entry["event"], entry["detail"])
+                last_log_n = len(fl)
+
+            # 黑盒层: CSV 记录
+            ctx.recorder.record(data)
+
+            fps_acc += time.time() - t0
+            fps_n += 1
+            if fps_acc >= 0.5:
+                data["fps"] = round(fps_n / fps_acc)
+                fps_acc = 0.0
+                fps_n = 0
+            else:
+                data["fps"] = 0
+
+            with ctx.lock:
+                ctx.state = data
+
+            elapsed = time.time() - t0
+            time.sleep(max(0.001, 0.02 - elapsed))
+        except (KeyboardInterrupt, SystemExit):
+            logger.info("sim_loop received exit signal, stopping.")
+            raise
+        except Exception:
+            logger.exception("[SIM-LOOP CRASH]")
+            time.sleep(0.5)
+
+
+def main():
+    """入口: 创建所有对象, 启动 sim 线程, serve HTTP.
+
+    N5 修复: 所有实例化移到此函数, 模块导入零副作用。
+    """
+    os.makedirs(_LOG_DIR, exist_ok=True)
+
+    ctx = BridgeContext()
+    ctx.recorder = FlightRecorder(_LOG_DIR)
+    atexit.register(ctx.recorder.close)
+
+    quad = Quadrotor3D()
+    wind = WindDisturbance(base_wind=np.array([0.08, 0.03, 0.05]), freq=0.3, gust_amp=0.06)
+    ctx.arm = RobotArm3DOF()
+    sensor = VirtualSensor()
+    mc = MissionController(mode="simulation", mock=True)
+    ctx.runtime = SimRuntime(mc, quad, wind, ctx.arm, sensor)
+
+    sim_thread = threading.Thread(target=sim_loop, args=(ctx,), daemon=True, name="sim")
+    sim_thread.start()
+    time.sleep(0.3)
+
+    _PORT = 8811
+    print("", flush=True)
+    print("=" * 60, flush=True)
+    print("  SeaBreeze Inspector - HTTP Bridge v3 (SimRuntime)", flush=True)
+    print("  Open: http://localhost:{}".format(_PORT), flush=True)
+    print("=" * 60, flush=True)
+    print("  [Space] Takeoff/Land  [WASD] Move  [PgUp/PgDn] Up/Down", flush=True)
+    print("  [M] Mission  [E] Emergency  [R] Reset  [Arrows] Arm", flush=True)
+    print("  Logs: {}  (sim_bridge.log + flight_*.csv)".format(_LOG_DIR), flush=True)
+    print("=" * 60, flush=True)
+    print("", flush=True)
+
+    server = BridgeServer(("127.0.0.1", _PORT), BridgeHandler, ctx)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\n[BRIDGE] Shutting down...")
+    finally:
+        ctx.recorder.close()
+
+
+if __name__ == "__main__":
+    main()

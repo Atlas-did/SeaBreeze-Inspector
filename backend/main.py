@@ -366,10 +366,12 @@ class MissionController:
 
         # ---------- LAND: 降落 ----------
         elif self.state == "LAND":
+            # 下降目标: 地面 (SimRuntime 级联控制读 mc.target_pos 驱动物理下降)
+            self.target_pos[2] = 0.0
             # 发送降落指令
             if self.drone.is_flying:
                 self.drone.land()
-            # 等待降落完成
+            # 等待降落完成 (SimDroneAdapter 延迟 is_flying=False 直到物理触地)
             if not self.drone.is_flying or self.current_pos[2] < 20:
                 self.state = "IDLE"
                 self._state_entry_time = time.time()
@@ -377,10 +379,10 @@ class MissionController:
 
         # ---------- EMERGENCY: 紧急状态 ----------
         elif self.state == "EMERGENCY":
-            # 立即停止所有运动并降落
-            print("[EMERGENCY] {} — 触发紧急降落".format(self._emergency_reason))
+            # 紧急下降目标: 地面 (触发紧急时 trigger_emergency 已打印入口日志)
+            self.target_pos[2] = 0.0
             self.drone.emergency()
-            # 转为降落状态
+            # 转为降落状态 (SimDroneAdapter 延迟 is_flying=False 直到物理触地)
             if not self.drone.is_flying:
                 self.state = "IDLE"
                 print("[MAIN] 紧急降落完成")
@@ -515,6 +517,9 @@ class MissionController:
         self.current_vel = np.asarray(velocity, dtype=float)
         self.current_attitude = np.asarray(attitude, dtype=float)
 
+        # #5 修复: 仿真路径也更新视频帧, 使 INSPECT 状态的检测管线能跑通
+        self._video_frame = self.video_stream.get_frame()
+
         # EKF (N6: 仿真传真实加速度, 真机传 None)
         self.ekf.predict(u=self._last_control_accel if self.mock else None)
         if sensor_z is not None:
@@ -645,6 +650,46 @@ class MissionController:
     def update_video_frame(self, frame: np.ndarray):
         """外部注入视频帧 (供视频线程调用)"""
         self._video_frame = frame
+
+    # =========================================================================
+    # 公共访问器 (Phase 3: 消除 SimRuntime/simulation.py 对 _battery/_emergency_reason
+    # 等私有属性的直接访问)
+    # =========================================================================
+
+    def get_battery(self) -> float:
+        """获取当前电量百分比 (0-100)"""
+        return self._battery
+
+    def set_battery(self, pct: float) -> None:
+        """设置电量 (供仿真电池消耗使用, 自动限幅 0-100)"""
+        self._battery = max(0.0, min(100.0, float(pct)))
+
+    def get_emergency_reason(self) -> str:
+        """获取紧急状态原因字符串 (无紧急时为空串)"""
+        return self._emergency_reason
+
+    def get_detection_count(self) -> int:
+        """获取最近一帧的检测框数量"""
+        return self._last_detection_count
+
+    def set_detection_count(self, count: int) -> None:
+        """设置检测框数量 (供仿真 mock 检测回喂)"""
+        self._last_detection_count = int(count)
+
+    def reset_mission(self) -> None:
+        """安全重置任务 (供仿真 KeyR 调用):
+        trigger_emergency → 清空 EKF/控制器/安全监控/电量/原因
+        mc.state 在下一帧 update_with_external_data() 中由 EMERGENCY→IDLE 自动恢复
+        """
+        self.trigger_emergency("reset")
+        self.target_pos = np.array([0.0, 0.0, 0.0])
+        self.ekf.reset()
+        self.controller.reset()
+        self.safety_guard.reset()
+        self._battery = 100.0
+        self._emergency_reason = ""
+        self.path = None
+        self.path_idx = 0
 
     def get_state_dict(self) -> dict:
         """返回完整状态字典 (供Dashboard/logging使用)"""

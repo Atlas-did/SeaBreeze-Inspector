@@ -29,14 +29,16 @@ class MissionState(Enum):
 
 
 # 合法状态转换表: {from_state: {to_state, ...}}
+# Q1=A: 手动降落是合理操作, 允许从任意飞行状态 (NAVIGATE/INSPECT) 直接转 LAND
 TRANSITIONS: Dict[MissionState, Set[MissionState]] = {
     MissionState.IDLE:      {MissionState.TAKEOFF, MissionState.HOVERING, MissionState.NAVIGATE},
     MissionState.TAKEOFF:   {MissionState.HOVERING, MissionState.LAND, MissionState.EMERGENCY},
     MissionState.HOVERING:  {MissionState.NAVIGATE, MissionState.LAND,
                               MissionState.EMERGENCY, MissionState.IDLE},
     MissionState.NAVIGATE:  {MissionState.INSPECT, MissionState.HOVERING,
+                              MissionState.LAND, MissionState.EMERGENCY},
+    MissionState.INSPECT:   {MissionState.RETURN, MissionState.LAND,
                               MissionState.EMERGENCY},
-    MissionState.INSPECT:   {MissionState.RETURN, MissionState.EMERGENCY},
     MissionState.RETURN:    {MissionState.LAND, MissionState.EMERGENCY},
     MissionState.LAND:      {MissionState.IDLE, MissionState.EMERGENCY},
     MissionState.EMERGENCY: {MissionState.IDLE, MissionState.LAND},  # 重置或强制降落
