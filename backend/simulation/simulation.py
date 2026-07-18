@@ -372,7 +372,7 @@ class Simulation:
 
                     self._handle_arm_keys(event)
 
-                    return
+                    continue
 
                 name = pygame.key.name(event.key)
 
@@ -548,9 +548,9 @@ class Simulation:
 
         if self._is_held(pygame.K_d, 32):   tgt[0] += step
 
-        if self._is_held(pygame.K_UP, 72):  tgt[2] += vstep
+        if self._is_held(pygame.K_PAGEUP, 73):   tgt[2] += vstep
 
-        if self._is_held(pygame.K_DOWN, 80): tgt[2] -= vstep
+        if self._is_held(pygame.K_PAGEDOWN, 78): tgt[2] -= vstep
 
         tgt[2] = max(0.3, tgt[2])
 

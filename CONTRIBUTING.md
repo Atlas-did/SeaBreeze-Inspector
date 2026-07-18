@@ -1,79 +1,80 @@
-# Contributing Guide
+# Contributing to SeaBreeze Inspector
 
-Thanks for your interest in contributing to the Offshore Wind UAV-Arm project!
+## Five Iron Rules (2026-07 Refactor)
 
-## Getting Started
+These rules were established during the Phase 1-6 refactor.
+Violating any of them will be flagged in code review.
 
-1. Fork the repo and clone locally
-2. Set up the dev environment:
+### Rule 1: Single MissionState Enum
 
-```bash
-pip install -r requirements.txt
-pip install -r requirements-dev.txt
-```
+The entire system has exactly one task state enumeration:
+`backend/mission/states.py:MissionState`.
 
-3. Run tests to verify everything works:
+- NO module may define custom task state strings
+- Use `normalize_state_name()` to convert legacy aliases
+- Historical aliases (TAKING_OFF, RETURNING, LANDING) are rejected at import time
 
-```bash
-python -m pytest tests/ -v
-```
+### Rule 2: Single Message Bus
+
+The entire system has exactly one message bus:
+`backend/utils/bus.py:MessageBus` (pub-sub model).
+
+- NO new Queue, dispatch thread, or second Message class
+- Each subscriber gets an independent queue (no consumer contention)
+- Use `bus.publish(topic, data)` to send, `sub.read_latest()` to receive
+- Legacy `bus.get()` is removed (raises NotImplementedError)
+
+### Rule 3: Unified Units and Coordinate System
+
+All modules must use consistent units. Conversions go through `backend/utils/units.py`.
+
+| Layer | Length | Velocity | Coordinate | Height axis |
+|-------|--------|----------|------------|-------------|
+| Backend (mission/core/EKF) | cm | cm/s | z-up | pos[2] |
+| Simulation physics | m | m/s | z-up | pos[2] |
+| Robotic arm | mm | - | z-up | pos[2] |
+| Web frontend boundary | m | m/s | y-up | pos[1] |
+
+- Cross-boundary conversions MUST use `units.py` functions
+- NO manual multiply/divide by 100, 1000, etc.
+- Web boundary conversion: `zup_cm_to_yup_m()` / `yup_m_to_zup_cm()`
+
+### Rule 4: Single Control Loop
+
+The simulation has exactly one control loop: `backend/runtime/loop.py:SimRuntime`.
+
+- All simulations (Pygame, HTTP bridge, tests) share the same loop
+- `MissionController.update_with_external_data()` is the common interface
+- Frontends are data sources or observers, never control loop owners
+
+### Rule 5: YAML-First Configuration
+
+Hardware parameters must live in `config/*.yaml`.
+
+- NO bare physical constants as fallbacks in code
+- Arm link lengths: read from `arm_config.yaml`, not hardcoded defaults
+- New parameters: add to schema + YAML, never only in code
 
 ## Development Workflow
 
-### Code Style
+1. Create branch: `feature/name-task`
+2. Write code + tests
+3. Run `pytest tests/ -q` -- must be all green
+4. Run direct smoke tests: `python tests/test_bus_pubsub.py`
+5. Submit PR with description of changes
 
-- Python code formatted with [Black](https://github.com/psf/black) (line length 88)
-- Lint with [Flake8](https://flake8.pycqa.org/)
-- YAML files: spaces only, 2-space indent (no tabs!)
-- Follow the existing patterns in each module
+## Code Review Checklist
 
-### Testing
+- [ ] No custom state strings (Rule 1)
+- [ ] No new Queue/dispatch/bus (Rule 2)
+- [ ] Unit conversions use `units.py` (Rule 3)
+- [ ] Simulations use `SimRuntime` (Rule 4)
+- [ ] Hardware params from YAML, not code (Rule 5)
+- [ ] `pytest tests/ -q` passes
 
-- All new features should include tests
-- Run the full suite before submitting:
+## Test Conventions
 
-```bash
-python -m pytest tests/ -v --tb=short
-```
-
-- Current test suites (14 total):
-
-| Suite | Coverage |
-|-------|----------|
-| `test_ekf.py` | EKF observer — matrix dims, state transition, accuracy, performance, adaptive Q |
-| `test_controller.py` | Feedforward PID — step response, disturbance rejection |
-| `test_arm.py` | Arm kinematics — FK/IK roundtrip, joint limits, Jacobian, reachability |
-| `test_trajectory.py` | RRT* — basic planning, multi-obstacle, performance, visualization |
-| `test_vision.py` | Defect detector — output format, edge cases, resize, draw |
-| `test_communication.py` | MessageBus — basic, callback, connector, thread safety, overflow |
-| `test_config.py` | Config loader — YAML load, nested access, missing keys, types |
-| `test_tello_mock.py` | Tello mock — basic, controller, emergency, battery |
-| `test_integration.py` | Integration — EKF+controller, FK/IK, RRT*, safety guard |
-| `test_simulation.py` | Simulation — physics, wind, sensors, turbine, arm model |
-| `test_safety_guard.py` | Safety guard — battery, attitude, height, timeout, reset, boundaries |
-| `test_arm_controller.py` | Arm controller — mock mode, IK, reset, duration |
-| `test_main.py` | State machine — 8-state transitions, SafetyGuard, Logger, VideoStream |
-| `test_e2e_simulation.py` | End-to-end — full mission flow, emergency interrupt, logging, shutdown |
-
-### Commit Messages
-
-Use conventional commits:
-
-```
-feat: add wind gust model to simulation
-fix: correct Kff sign in feedforward controller
-docs: update API_INTERFACE with new endpoints
-test: add safety guard boundary tests
-refactor: use cKDTree for RRT* nearest neighbor
-```
-
-### Pull Requests
-
-1. Reference any related issues
-2. Describe what changed and why
-3. Ensure CI passes (tests run on push automatically)
-4. Request review from a maintainer
-
-## Project Architecture
-
-See [ARCHITECTURE_DECISIONS.md](docs/ARCHITECTURE_DECISIONS.md) for design rationale and [SOFTWARE.md](docs/SOFTWARE.md) for data flow diagrams.
+- Each test file must support both `pytest` and direct `python tests/xxx.py`
+- Add `if __name__ == '__main__':` block for direct execution
+- Use `@pytest.fixture` for shared setup
+- Use `@pytest.mark.hardware` for tests requiring real drone/arm

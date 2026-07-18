@@ -260,7 +260,7 @@ def draw_arm_3d(surface, cam, drone_pos, angles, screen_w, screen_h):
 
     # Base position (below drone)
     bx = drone_pos[0]
-    by = drone_pos[1] - 0.041 / 2  # bottom of drone body
+    by = drone_pos[2] - 0.041 / 2  # bottom of drone body (z-up)
     bz = drone_pos[2]
 
     # Joint positions
@@ -411,8 +411,7 @@ class Pygame3DSim:
         self.arm = RobotArm3DOF()
         self.sensor = VirtualSensor()
         self.mc = MissionController(mode="simulation", mock=True)
-        self.mc.safety_guard.THRESHOLDS["timeout_land"] = 3600.0
-        self.mc.safety_guard.THRESHOLDS["timeout_kill"] = 3600.0
+        # A1 fixed: heartbeat called every frame, no need for timeout workaround
 
         # State
         self.hover_height = 1.2
@@ -525,7 +524,7 @@ class Pygame3DSim:
                 self._flight_log.append(f"[{self._sim_time:.1f}s] TAKEOFF -> hover at {self.hover_height}m")
             else:
                 self.mc.request_state("LAND", "manual")
-                self._target[1] = 0.0
+                self._target[2] = 0.0  # z-up: height=Z
                 self._flight_log.append(f"[{self._sim_time:.1f}s] LAND")
         elif key == pygame.K_r:
             self.mc.request_state("IDLE", "reset")
@@ -606,7 +605,7 @@ class Pygame3DSim:
 
         elif self._demo_phase == 4:
             # Return and land
-            if np.linalg.norm(pos[:2]) < 0.5 and pos[1] < 0.1:
+            if np.linalg.norm(pos[:2]) < 0.5 and pos[2] < 0.1:  # z-up: height=pos[2]
                 self.mc.request_state("LAND", "auto")
                 self._flight_log.append(f"[{self._sim_time:.1f}s] DEMO: Landing")
                 self._demo_phase = 5
@@ -623,7 +622,7 @@ class Pygame3DSim:
         self._log_timer += dt
         if self._log_timer > 3.0:
             self._log_timer = 0
-            self._flight_log.append(f"[{self._sim_time:.1f}s] State={state_str} Bat={self.mc._battery:.0f}% H={pos[1]:.1f}m")
+            self._flight_log.append(f"[{self._sim_time:.1f}s] State={state_str} Bat={self.mc._battery:.0f}% H={pos[2]:.1f}m  # z-up height")
         if len(self._flight_log) > 50:
             self._flight_log = self._flight_log[-50:]
 

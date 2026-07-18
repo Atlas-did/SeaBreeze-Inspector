@@ -500,7 +500,7 @@ class MissionController:
             return True
         if event.level == SafetyLevel.OK:
             self._warned = False
-            self._last_heartbeat = time.time()
+            # P1: _last_heartbeat 已由 FailsafeMonitor.heartbeat() 替代
         return False
 
     def update_with_external_data(self, sensor_z, position, velocity, attitude):

@@ -24,8 +24,8 @@ This project proposes an intelligent inspection solution combining a UAV with a 
 | Robotic Arm | 3-DOF SG90 servos + 3D-printed structure |
 | MCU | Arduino Nano (CH340) + PCA9685 servo driver |
 | Algorithms | 12D-EKF, PID+Feedforward, RRT\*, YOLOv8-Nano |
-| Simulation | Pygame 3D visualization |
-| Frontend | Tkinter monitoring dashboard |
+| Simulation | Pygame + Three.js 3D visualization |
+| Frontend | Tkinter dashboard (monitor-only) + Web 3D (main demo) |
 | Language | Python 3.10+ |
 
 ## Quick Start
@@ -43,7 +43,12 @@ bash scripts/setup_env.sh
 ### 2. Run Simulation
 
 ```bash
+# Pygame desktop simulation
 python -m backend.simulation.simulation
+
+# Web 3D simulation (main demo)
+python backend/simulation/http_bridge.py
+# Then open: http://localhost:8800
 ```
 
 ### 3. Flash Arduino Firmware
@@ -55,7 +60,7 @@ python scripts/flash_firmware.py
 ### 4. Run Tests
 
 ```bash
-# Run all test suites (17 files)
+# Run all test suites (134 tests in 20 files)
 bash scripts/run_tests.sh      # Linux/macOS
 scripts\run_tests.bat          # Windows
 
@@ -69,70 +74,24 @@ python tests/test_e2e_simulation.py  # End-to-end simulation
 
 ```
 offshore-wind-uav-arm/
-├── backend/
-│   ├── core/              # Algorithms (EKF / Controller / Path Planning)
-│   ├── drone/             # Tello interface (state machine / video stream)
-│   ├── arm/               # Robotic arm control (kinematics / controller)
-│   ├── vision/            # YOLO defect detection (detector / training / datasets)
-│   ├── simulation/        # Pygame simulation (models / renderer)
-│   ├── utils/             # Config / logging / communication utilities
-│   ├── main.py            # Main scheduler (8-state FSM + SafetyGuard)
-│   └── safety_guard.py    # Safety monitor (battery / attitude / height / timeout)
-├── firmware/              # Arduino firmware (servo controller)
-├── frontend/              # Tkinter monitoring dashboard
-├── config/                # YAML configuration templates (with schema validation)
-├── docs/                  # Technical documentation
-├── scripts/               # One-click setup & flash scripts
-├── tests/                 # 14 test suites (unit / integration / E2E)
-├── .github/workflows/     # CI configuration (test.yml)
-├── requirements.txt       # Production dependencies
-├── requirements-dev.txt   # Development dependencies
-└── pytest.ini             # pytest configuration
+|-- backend/
+|   |-- core/              # Algorithms (EKF / PID+FF / RRT* / Filters)
+|   |-- drone/             # Tello interface + RCManager
+|   |-- arm/               # Robotic arm kinematics + controller
+|   |-- vision/            # YOLO defect detection + training
+|   |-- simulation/        # Pygame sim + HTTP bridge + models
+|   |-- runtime/           # SimRuntime single control loop    [Phase 3]
+|   |-- hal/               # Hardware abstraction layer        [Phase 4]
+|   |-- mission/           # Mission states + FailsafeMonitor
+|   |-- utils/             # Bus(pub-sub) / Config / Units / Logger
+|   +-- main.py            # MissionController (8-state FSM)
+|-- frontend/              # Tkinter dashboard (monitor)
+|-- firmware/              # Arduino servo controller
+|-- config/                # YAML configuration files
+|-- data/                  # Flight logs + datasets
+|-- tests/                 # Pytest suite (134 tests, 20 files)
+|-- scripts/               # Setup / flash / verification tools
+|-- docs/                  # Documentation + attic
++-- seabreeze-3d-sim/      # Web 3D sim (Three.js, main demo)
 ```
 
-## Documentation
-
-| Document | Description |
-|----------|-------------|
-| [API_INTERFACE.md](docs/API_INTERFACE.md) | Full module API reference |
-| [ARCHITECTURE_DECISIONS.md](docs/ARCHITECTURE_DECISIONS.md) | Architecture Decision Records (ADRs) |
-| [EKF_DERIVATION.md](docs/EKF_DERIVATION.md) | EKF mathematical derivation |
-| [KINEMATICS_DERIVATION.md](docs/KINEMATICS_DERIVATION.md) | Arm kinematics derivation |
-| [TRAJECTORY_ALGORITHM.md](docs/TRAJECTORY_ALGORITHM.md) | RRT\* path planning algorithm |
-| [FLASH_GUIDE.md](docs/FLASH_GUIDE.md) | Arduino flashing guide |
-| [PINOUT.md](docs/PINOUT.md) | Pin definitions & wiring |
-| [SERVO_PROTOCOL.md](docs/SERVO_PROTOCOL.md) | Serial communication protocol |
-| [TUNING_GUIDE.md](docs/TUNING_GUIDE.md) | PID & EKF parameter tuning |
-| [HARDWARE.md](docs/HARDWARE.md) | Hardware BOM & assembly |
-| [SOFTWARE.md](docs/SOFTWARE.md) | Software architecture |
-| [SIM_GUIDE.md](docs/SIM_GUIDE.md) | Simulation user guide |
-| [TESTING.md](docs/TESTING.md) | Testing strategy & coverage |
-
-## State Machine
-
-```
-IDLE → TAKEOFF → HOVERING → NAVIGATE(RRT*) → INSPECT(YOLO) → RETURN → LAND
-  ↑                                                                      ↓
-  └────────────────────── EMERGENCY (any state) ─────────────────────────┘
-```
-
-## Contributing
-
-Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Run tests (`python -m pytest tests/ -v`)
-4. Commit your changes
-5. Open a Pull Request
-
-## License
-
-This project is licensed under the MIT License — see [LICENSE](LICENSE) for details.
-
-## References
-
-- [DJITelloPy](https://github.com/damiafuentes/DJITelloPy) — DJI Tello Python SDK
-- [PX4-Autopilot](https://github.com/PX4/PX4-Autopilot) — Industrial-grade EKF & sensor fusion
-- [Ultralytics YOLOv8](https://github.com/ultralytics/ultralytics) — YOLO training best practices
-- [Betaflight](https://github.com/betaflight/betaflight) — IMU filtering & PID tuning
