@@ -207,7 +207,8 @@ class Simulation:
 
         self.mc = MissionController(mode="simulation", mock=True)
 
-        self.mc.safety_guard.THRESHOLDS["timeout"] = 10.0  # 仿真放宽超时
+        # A5修复: 旧键 "timeout" 不存在于 FailsafeMonitor.THRESHOLDS
+        # (真实键为 timeout_land/timeout_kill), A1 修复后 heartbeat 每帧调用, 无需放宽
 
 
 

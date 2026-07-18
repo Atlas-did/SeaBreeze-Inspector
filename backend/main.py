@@ -28,10 +28,6 @@ from backend.utils.bus import TOPIC_MISSION_STATUS, TOPIC_DRONE_COMMAND
 from backend.mission.states import MissionState, can_transition
 
 
-# MissionController: 任务主调度器 (别名为兼容角色文档)
-MainController = None  # 将在类定义后设置
-
-
 class MissionController:
     """
     任务主调度器 — 有限状态机(FSM)驱动。
@@ -483,6 +479,9 @@ class MissionController:
         N1修复: 分层Failsafe — WARN告警/LAND自动降落/KILL急停
         返回 True 表示触发了 KILL 级紧急状态。
         """
+        # A1修复: 每帧心跳, 否则 monitor 创建 1s 后误报LAND, 3s 后误报KILL。
+        self.safety_guard.heartbeat()
+
         # EMERGENCY 状态下允许状态机继续运行 (用于降落后的 IDLE 恢复)
         event = self.safety_guard.check(
             battery=int(self._battery),

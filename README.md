@@ -55,7 +55,7 @@ python scripts/flash_firmware.py
 ### 4. Run Tests
 
 ```bash
-# Run all 14 test suites
+# Run all test suites (17 files)
 bash scripts/run_tests.sh      # Linux/macOS
 scripts\run_tests.bat          # Windows
 

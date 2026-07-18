@@ -21,7 +21,7 @@ from backend.core.disturbance_observer import DisturbanceObserverEKF
 from backend.core.feedforward_controller import FeedforwardController
 from backend.arm.arm_kinematics import FK, IK
 from backend.core.trajectory_planning import RRTStarPlanner
-from backend.safety_guard import SafetyGuard
+from backend.mission.safety import FailsafeMonitor, SafetyLevel
 
 
 def test_ekf_controller_loop():
@@ -99,19 +99,24 @@ def test_safety_guard():
     """测试安全守护"""
     print("[TEST] 安全守护测试")
 
-    guard = SafetyGuard()
+    guard = FailsafeMonitor()
 
     # 正常状态
-    assert guard.check({"battery": 50, "attitude": [0, 0, 0], "height": 100})
+    e = guard.check(battery=50, attitude=[0, 0, 0], height=100)
+    assert e.level == SafetyLevel.OK
 
-    # 低电量
-    assert not guard.check({"battery": 5, "attitude": [0, 0, 0], "height": 100})
-    assert guard.emergency_reason.startswith("低电量")
+    # 低电量 (默认阈值 land=10, kill=5 → battery=3 触发 KILL)
+    guard.heartbeat()
+    e = guard.check(battery=3, attitude=[0, 0, 0], height=100)
+    assert e.level == SafetyLevel.KILL
+    assert "电量" in e.reason
 
     guard.reset()
 
     # 姿态异常
-    assert not guard.check({"battery": 50, "attitude": [40, 0, 0], "height": 100})
+    guard.heartbeat()
+    e = guard.check(battery=50, attitude=[40, 0, 0], height=100)
+    assert e.level == SafetyLevel.LAND  # 默认 attitude_land=30°, kill=60°
 
     print("  [PASS]")
 

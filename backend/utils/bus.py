@@ -1,11 +1,18 @@
 """
 pub-sub 消息总线 — 每 topic 独立分发, 消灭消费者竞争
 
+铁律 #2: 全系统只有这一个消息总线。
+禁止新建 Queue / dispatch 线程 / 第二套 Message 类。
+
 用法:
     bus = MessageBus()
     sub = bus.subscribe("drone/state")
     bus.publish("drone/state", {"battery": 85})
     msg = sub.read_latest()  # 非阻塞, 返回最新一条
+
+变更记录 (2026-07 重构 Phase 1):
+  - 删除旧的 get() 兼容桩 (原实现永远返回 None, 属于坏的兼容接口)
+  - put() 兼容接口保留 (main.py 仿真回路仍在用), Phase 3 统一为 publish() 后移除
 """
 
 from __future__ import annotations
@@ -15,7 +22,7 @@ import threading
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 
 @dataclass
@@ -91,6 +98,11 @@ class MessageBus:
             if sub in self._subscribers[topic]:
                 self._subscribers[topic].remove(sub)
 
+    def subscriber_count(self, topic: str) -> int:
+        """某 topic 的订阅者数量 (调试用)"""
+        with self._lock:
+            return len(self._subscribers[topic])
+
     def publish(self, topic: str, data: Any, source: str = "") -> int:
         """发布消息到 topic, fan-out 到所有订阅者。返回接收者数量"""
         msg = Message(topic=topic, data=data, source=source)
@@ -102,20 +114,22 @@ class MessageBus:
                 delivered += 1
         return delivered
 
-    # ---- 向后兼容 communication.py 的 put/get 接口 ----
+    # ---- 向后兼容接口 (Phase 3 移除) ----
+
     def put(self, msg: Message, block: bool = True, timeout: float = 1.0) -> bool:
-        """兼容旧接口: publish 到 msg.topic"""
+        """兼容旧接口: publish 到 msg.topic。新代码请直接用 publish()"""
         return self.publish(msg.topic, msg.data, msg.source) > 0
 
     def get(self, block: bool = True, timeout: float = 1.0) -> Optional[Message]:
-        """兼容旧接口: 创建临时 subscription 读取一次 (不推荐新代码使用)"""
-        # 创建临时订阅, 等待消息
-        deadline = time.time() + timeout
-        while time.time() < deadline:
-            # 遍历所有 topic 的订阅者... 这在 pub-sub 模型下不好做
-            # 简单回退: 返回 None
-            break
-        return None
+        """已移除: pub-sub 模型下不存在全局队列可取。
+
+        旧代码迁移方式:
+            sub = bus.subscribe("你的/topic")   # 初始化时一次
+            msg = sub.read_latest()             # 消费时
+        """
+        raise NotImplementedError(
+            "MessageBus.get() 已在 Phase 1 移除 (原实现是永远返回 None 的坏桩)。"
+            "请改用 bus.subscribe(topic) + sub.read_latest()。")
 
     def start(self) -> None:
         """兼容旧接口 (pub-sub 模式下无需显式启动)"""
@@ -131,7 +145,7 @@ def create_message_bus() -> MessageBus:
     return MessageBus()
 
 
-# 预定义 topic 常量 (与 communication.py 保持一致)
+# 预定义 topic 常量 — 全系统唯一命名空间, 新增 topic 必须先在这里登记
 TOPIC_DRONE_STATE = "drone/state"
 TOPIC_DRONE_COMMAND = "drone/command"
 TOPIC_ARM_STATE = "arm/state"
