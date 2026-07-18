@@ -30,6 +30,10 @@ window.addEventListener('keydown', function(e) {
 window.addEventListener('keyup', function(e) {
   if (e.code === 'KeyC') cWasPressed = false;
   delete keyLastSent[e.code];
+  // Send key release to backend so drone stops moving
+  if (CFG.FORWARD_KEYS.has(e.code)) {
+    backend.sendKey(e.code + '_UP');
+  }
 });
 
 // Main loop

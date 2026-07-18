@@ -43,10 +43,14 @@ def sim_loop():
             t0 = time.time()
 
             with _key_lock:
-                keys = _pending_keys.copy()
-                _pending_keys.clear()
+                keys = _pending_keys.copy()  # read without clearing; keys removed on _UP
 
             data = runtime.step(0.02, keys)
+            # Toggle keys are one-shot: consume after processing
+            for k in ("Space", "KeyR", "KeyE", "KeyM"):
+                if k in keys:
+                    with _key_lock:
+                        _pending_keys.discard(k)
 
             fps_acc += time.time() - t0
             fps_n += 1
@@ -103,7 +107,10 @@ class BridgeHandler(http.server.SimpleHTTPRequestHandler):
                     return
                 if key:
                     with _key_lock:
-                        _pending_keys.add(key)
+                        if key.endswith("_UP"):
+                            _pending_keys.discard(key[:-3])  # remove held key
+                        else:
+                            _pending_keys.add(key)
                 self._json(200, {"ok": True})
                 return
 

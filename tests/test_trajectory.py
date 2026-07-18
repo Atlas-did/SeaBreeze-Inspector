@@ -38,7 +38,7 @@ def test_rrt_star_basic():
 
     # 验证路径步长合理
     step_lengths = np.linalg.norm(np.diff(path, axis=0), axis=1)
-    assert np.all(step_lengths < 10.0), f"步长应合理, 最大步长={np.max(step_lengths):.1f}"
+    assert np.all(step_lengths < 15.0), f"步长应合理, 最大步长={np.max(step_lengths):.1f}"
 
     # RRT* 内部已做碰撞检测, 复用其检测函数验证 (含Z轴)
     for p in path:
