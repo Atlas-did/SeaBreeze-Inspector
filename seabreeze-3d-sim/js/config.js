@@ -10,8 +10,8 @@ export const CFG = {
   ARM_THROTTLE_MS: 100,         // arm slider forwarding throttle
   OFFLINE_THRESHOLD: 3,         // consecutive failures before "offline"
 
-  // Scene
-  TURBINE_POS: [9, 0, -2],      // turbine world position
+  // Scene — 坐标约定: 后端 z-up (x东, y北, z高度), 渲染层负责转 three.js y-up
+  TURBINE_POS: [9, 0, 0],       // turbine base center, 后端 z-up 坐标
   CAMERA_INITIAL: [6, 4, 8],    // initial camera position
   LOOKAT_INITIAL: [0, 1.5, 0],  // initial look-at target
   TRAIL_MAX: 400,               // max trail points
@@ -39,6 +39,7 @@ export const CFG = {
   FORWARD_KEYS: new Set([
     'Space', 'KeyW', 'KeyA', 'KeyS', 'KeyD',
     'KeyR', 'KeyE', 'KeyM',
+    'PageUp', 'PageDown',
     'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown',
   ]),
 

@@ -26,6 +26,8 @@ export class HUD {
       'background:#c83737;color:#fff;font:12px monospace;z-index:100;border-radius:0 0 6px 6px;display:none;';
     this._badge.textContent = 'BACKEND OFFLINE';
     document.body.appendChild(this._badge);
+    this._prevOnline = true;
+    this._badgeTimer = null;
   }
 
   // ---- Camera canvas init ----
@@ -89,10 +91,23 @@ export class HUD {
   update(data, dt) {
     if (!data) return;
 
-    // Offline badge
-    this._badge.style.display = backend.isOnline() ? 'none' : 'block';
-    if (!backend.isOnline()) {
-      this._badge.style.background = '#c83737';
+    // Offline badge: 断连红色闪烁, 重连后短暂显示绿色 CONNECTED
+    const online = backend.isOnline();
+    if (online !== this._prevOnline) {
+      this._prevOnline = online;
+      if (online) {
+        this._badge.textContent = 'CONNECTED';
+        this._badge.style.background = '#2e9e5b';
+        this._badge.style.display = 'block';
+        clearTimeout(this._badgeTimer);
+        this._badgeTimer = setTimeout(() => { this._badge.style.display = 'none'; }, 1500);
+      } else {
+        this._badge.textContent = 'BACKEND OFFLINE';
+        this._badge.style.background = '#c83737';
+        this._badge.style.display = 'block';
+      }
+    } else if (!online) {
+      this._badge.style.display = 'block';
     }
 
     // FPS (from backend)
@@ -117,7 +132,8 @@ export class HUD {
 
     if (data.pos) {
       const t = CFG.TURBINE_POS;
-      set('t-dist', Math.hypot(data.pos[0] - t[0], data.pos[2] - t[2]).toFixed(1) + ' m');
+      // z-up: 水平距离用 x-y 平面, 不混入高度 z
+      set('t-dist', Math.hypot(data.pos[0] - t[0], data.pos[1] - t[1]).toFixed(1) + ' m');
     }
     set('t-target', (data.state === 'HOVERING' || data.state === 'NAVIGATE') ? f3(data.pos) : '--');
 
@@ -169,9 +185,9 @@ export class HUD {
     for (let x = 0; x < W; x += 30) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
     for (let y = 0; y < H; y += 30) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
 
-    // Distance check
+    // Distance check (z-up: x-y 水平面)
     const t = CFG.TURBINE_POS;
-    const dist = data.pos ? Math.hypot(data.pos[0] - t[0], data.pos[2] - t[2]) : 999;
+    const dist = data.pos ? Math.hypot(data.pos[0] - t[0], data.pos[1] - t[1]) : 999;
     const isClose = (data.state === 'HOVERING' || data.state === 'INSPECT' || data.state === 'NAVIGATE') && dist < CFG.DETECTION_RANGE;
 
     // Detections: prefer backend, fallback to mock

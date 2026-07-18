@@ -48,6 +48,9 @@ htmlcov/
 # Jupyter
 .ipynb_checkpoints/
 
+# Flight logs
+logs/
+
 # Internal docs (keep only public-facing README/LICENSE/CONTRIBUTING)
 docs/*.md
 !docs/API_INTERFACE.md

@@ -42,11 +42,20 @@ class Quadrotor3D:
 
 
 
+    # 姿态环时间常数 (s) — 模拟真实飞控的姿态响应, 越小响应越快
+    ATT_TAU = 0.15
+    # 最大倾角 (rad) — 限 roll/pitch, 不限 yaw
+    MAX_TILT = 0.5
+    # 线性气动阻力系数 (N·s/m) — 提供速度阻尼, 消除"冰上滑行"感
+    DRAG_COEF = 0.06
+
+
+
     def __init__(self, mass: float = 0.087, dt: float = 0.1):
 
         self.mass = mass  # kg (Tello实测87g)
 
-        self.dt = dt
+        self.dt = dt  # 默认步长 (可被 step(dt=...) 覆盖)
 
         self.g = 9.81  # m/s²
 
@@ -56,7 +65,8 @@ class Quadrotor3D:
 
 
 
-    def step(self, control: np.ndarray, disturbance: np.ndarray = None):
+    def step(self, control: np.ndarray, disturbance: np.ndarray = None,
+             dt: float = None):
 
         """
 
@@ -66,9 +76,12 @@ class Quadrotor3D:
 
         参数:
 
-            control: [thrust(N), d_roll, d_pitch, d_yaw] (弧度/秒)
-
-            disturbance: [fx, fy, fz] (N)
+            control: [thrust(N), roll_des, pitch_des, yaw_rate]
+                     roll_des/pitch_des 为期望倾角 (rad), 内部姿态环一阶跟踪;
+                     yaw_rate 为偏航角速度 (rad/s)
+            disturbance: [fx, fy, fz] (N) — 风等外力
+            dt: 本帧步长 (s); None 时用 self.dt。
+                调用方应传入真实帧间隔, 避免"仿真时间 vs 墙钟时间"漂移。
 
         """
 
@@ -76,25 +89,26 @@ class Quadrotor3D:
 
             disturbance = np.zeros(3)
 
+        if dt is None:
 
-
-        thrust, d_roll, d_pitch, d_yaw = control
-
-
-
-        # 姿态更新 (简单积分)
-
-        self.state[6] += d_roll * self.dt   # roll
-
-        self.state[7] += d_pitch * self.dt  # pitch
-
-        self.state[8] += d_yaw * self.dt    # yaw
+            dt = self.dt
 
 
 
-        # 限制姿态角
+        thrust, roll_des, pitch_des, yaw_rate = control
 
-        self.state[6:9] = np.clip(self.state[6:9], -np.pi/3, np.pi/3)
+
+
+        # 姿态环: 一阶惯性跟踪期望倾角 (替代原来的"速率直接积分")
+        k_att = min(1.0, dt / self.ATT_TAU)
+
+        self.state[6] += (np.clip(roll_des, -self.MAX_TILT, self.MAX_TILT)
+                          - self.state[6]) * k_att
+
+        self.state[7] += (np.clip(pitch_des, -self.MAX_TILT, self.MAX_TILT)
+                          - self.state[7]) * k_att
+
+        self.state[8] += yaw_rate * dt  # yaw 不限幅, 自由旋转
 
 
 
@@ -102,7 +116,7 @@ class Quadrotor3D:
 
         roll, pitch, yaw = self.state[6:9]
 
-        # 简化: 推力主要沿Z轴
+        # 简化: 推力沿机体Z轴 (小角度近似)
 
         fx = thrust * np.sin(pitch)
 
@@ -112,27 +126,37 @@ class Quadrotor3D:
 
 
 
+        # 线性气动阻力: F = -c·v (物理手感的关键: 松杆自动减速)
+
+        drag = -self.DRAG_COEF * self.state[3:6]
+
+
+
         # 加速度 (存储供虚拟传感器读取)
 
-        self.acceleration = np.array([fx, fy, fz]) / self.mass + disturbance / self.mass
+        self.acceleration = (np.array([fx, fy, fz]) + disturbance + drag) / self.mass
 
 
 
         # 速度更新
 
-        self.state[3:6] += self.acceleration * self.dt
+        self.state[3:6] += self.acceleration * dt
 
 
 
         # 位置更新
 
-        self.state[0:3] += self.state[3:6] * self.dt
+        self.state[0:3] += self.state[3:6] * dt
 
 
 
-        # 高度限制
+        # 高度限制 (触地即停垂直速度, 防止地下反弹鬼畜)
 
-        self.state[2] = max(0, self.state[2])
+        if self.state[2] < 0:
+
+            self.state[2] = 0.0
+
+            self.state[5] = max(0.0, self.state[5])
 
 
 

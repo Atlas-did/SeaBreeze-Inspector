@@ -7,6 +7,8 @@ Open: http://localhost:8811
 """
 
 import http.server, json, os, sys, threading, time, urllib.parse, traceback
+import logging
+from logging.handlers import RotatingFileHandler
 import numpy as np
 
 _PROJ_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -17,11 +19,59 @@ from backend.simulation.models import Quadrotor3D, WindDisturbance, RobotArm3DOF
 from backend.main import MissionController
 from backend.runtime.loop import SimRuntime
 
+# ---- 双层日志: 事件层(sim_bridge.log) + 黑盒层(flight_*.csv) ----
+_LOG_DIR = os.path.join(_PROJ_ROOT, "logs")
+os.makedirs(_LOG_DIR, exist_ok=True)
+
+logger = logging.getLogger("seabreeze.bridge")
+logger.setLevel(logging.INFO)
+_fh = RotatingFileHandler(os.path.join(_LOG_DIR, "sim_bridge.log"),
+                          maxBytes=1 << 20, backupCount=3, encoding="utf-8")
+_fh.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(message)s"))
+logger.addHandler(_fh)
+logger.addHandler(logging.StreamHandler(sys.stdout))
+
+
+class FlightRecorder:
+    """黑盒飞行记录器: 每 100ms 落一行 CSV, 供事后 pandas 分析."""
+
+    COLUMNS = "t,state,x,y,z,vx,vy,vz,battery,ekf_mahal\n"
+
+    def __init__(self, log_dir, interval=0.1):
+        self._interval = interval
+        self._last = 0.0
+        path = os.path.join(log_dir, "flight_" + time.strftime("%Y%m%d_%H%M%S") + ".csv")
+        self._f = open(path, "w", encoding="utf-8")
+        self._f.write(self.COLUMNS)
+        self._f.flush()
+        logger.info("FlightRecorder -> %s", path)
+
+    def record(self, data):
+        now = time.time()
+        if now - self._last < self._interval:
+            return
+        self._last = now
+        p = data.get("pos", [0, 0, 0])
+        v = data.get("vel", [0, 0, 0])
+        row = "{:.2f},{},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.3f},{:.1f},{:.2f}\n".format(
+            now, data.get("state", "?"), p[0], p[1], p[2],
+            v[0], v[1], v[2], data.get("battery", 0), data.get("ekf_mahal", 0))
+        try:
+            self._f.write(row)
+            self._f.flush()
+        except Exception:
+            pass
+
+
+recorder = FlightRecorder(_LOG_DIR)
+
 # ---- Shared state ----
 _state = {"pos": [0, 0, 0], "state": "IDLE", "battery": 100, "fps": 0}
 _lock = threading.Lock()
-_pending_keys = set()
+# 按键表: key -> 最近一次刷新的时间戳 (TTL 过期自动释放, 防失焦卡键)
+_pending_keys = {}
 _key_lock = threading.Lock()
+KEY_TTL = 0.6  # 秒; 前端按住期间约每 80ms 刷新一次
 
 # ---- Backend objects ----
 quad = Quadrotor3D()
@@ -33,24 +83,44 @@ runtime = SimRuntime(mc, quad, wind, arm, sensor)
 
 
 def sim_loop():
-    """Background thread: run SimRuntime.step() at 50Hz."""
+    """Background thread: run SimRuntime.step() at ~50Hz with real dt."""
     global _state
     fps_acc = 0.0
     fps_n = 0
+    last_t = time.time()
+    last_log_n = len(runtime._flight_log)
 
     while True:
         try:
             t0 = time.time()
+            dt = min(0.05, t0 - last_t)  # 真实帧间隔, 物理时间不再漂移
+            last_t = t0
 
+            now = time.time()
             with _key_lock:
-                keys = _pending_keys.copy()  # read without clearing; keys removed on _UP
+                # TTL 过滤: 超过 KEY_TTL 未刷新的按键自动释放
+                keys = {k for k, ts in _pending_keys.items() if now - ts < KEY_TTL}
+                expired = [k for k, ts in _pending_keys.items() if now - ts >= KEY_TTL]
+                for k in expired:
+                    del _pending_keys[k]
+                    logger.info("key expired (TTL): %s", k)
 
-            data = runtime.step(0.02, keys)
+            data = runtime.step(dt, keys)
             # Toggle keys are one-shot: consume after processing
             for k in ("Space", "KeyR", "KeyE", "KeyM"):
                 if k in keys:
                     with _key_lock:
-                        _pending_keys.discard(k)
+                        _pending_keys.pop(k, None)
+
+            # 事件层日志: 把 runtime flight_log 的新条目落盘
+            fl = runtime._flight_log
+            if len(fl) != last_log_n:
+                for entry in fl[last_log_n:]:
+                    logger.info("%s | %s", entry["event"], entry["detail"])
+                last_log_n = len(fl)
+
+            # 黑盒层: CSV 记录
+            recorder.record(data)
 
             fps_acc += time.time() - t0
             fps_n += 1
@@ -67,7 +137,7 @@ def sim_loop():
             elapsed = time.time() - t0
             time.sleep(max(0.001, 0.02 - elapsed))
         except Exception:
-            print("[SIM-LOOP CRASH]", flush=True)
+            logger.exception("[SIM-LOOP CRASH]")
             traceback.print_exc()
             time.sleep(0.5)
 
@@ -108,9 +178,9 @@ class BridgeHandler(http.server.SimpleHTTPRequestHandler):
                 if key:
                     with _key_lock:
                         if key.endswith("_UP"):
-                            _pending_keys.discard(key[:-3])  # remove held key
+                            _pending_keys.pop(key[:-3], None)  # remove held key
                         else:
-                            _pending_keys.add(key)
+                            _pending_keys[key] = time.time()  # add/refresh TTL
                 self._json(200, {"ok": True})
                 return
 
@@ -166,8 +236,9 @@ print("=" * 60, flush=True)
 print("  SeaBreeze Inspector - HTTP Bridge v3 (SimRuntime)", flush=True)
 print(f"  Open: http://localhost:{_PORT}", flush=True)
 print("=" * 60, flush=True)
-print("  [Space] Takeoff/Land  [WASD] Move  [M] Mission", flush=True)
-print("  [E] Emergency  [R] Reset  [Arrows] Arm", flush=True)
+print("  [Space] Takeoff/Land  [WASD] Move  [PgUp/PgDn] Up/Down", flush=True)
+print("  [M] Mission  [E] Emergency  [R] Reset  [Arrows] Arm", flush=True)
+print(f"  Logs: {_LOG_DIR}  (sim_bridge.log + flight_*.csv)", flush=True)
 print("=" * 60, flush=True)
 print("", flush=True)
 

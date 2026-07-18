@@ -5,6 +5,10 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { buildDrone, buildTurbine, buildEnvironment, buildWindParticles } from './models.js';
 import { CFG } from './config.js';
 
+// 后端 z-up (x东, y北, z高度) → three.js y-up (x右, y上, z屏幕外)
+// 映射: three.x = b.x, three.y = b.z, three.z = -b.y
+function b2t(p) { return [p[0], p[2], -p[1]]; }
+
 export class SimScene {
   constructor(containerId) {
     // Renderer
@@ -29,7 +33,8 @@ export class SimScene {
 
     // Entities
     this.turbine = buildTurbine();
-    [this.turbine.group.position.x, this.turbine.group.position.y, this.turbine.group.position.z] = CFG.TURBINE_POS;
+    const tp = b2t(CFG.TURBINE_POS);  // CFG 存后端 z-up 坐标, 渲染前转换
+    this.turbine.group.position.set(tp[0], tp[1], tp[2]);
     this.scene.add(this.turbine.group);
 
     this.drone = buildDrone();
@@ -83,13 +88,14 @@ export class SimScene {
     const vel = data.vel || [0, 0, 0];
     const wind = data.wind || [0, 0, 0];
 
-    // Drone position
-    this.drone.group.position.set(pos[0], pos[1], pos[2]);
+    // Drone position (后端 z-up → three y-up)
+    const dp = b2t(pos);
+    this.drone.group.position.set(dp[0], dp[1], dp[2]);
 
-    // Tilt
+    // Tilt: 前飞低头 (rotation.z), 侧飞压坡 (rotation.x)
     const tilt = 0.15;
     this.drone.group.rotation.z = THREE.MathUtils.lerp(this.drone.group.rotation.z, -vel[0] * tilt, 0.1);
-    this.drone.group.rotation.x = THREE.MathUtils.lerp(this.drone.group.rotation.x, vel[2] * tilt, 0.1);
+    this.drone.group.rotation.x = THREE.MathUtils.lerp(this.drone.group.rotation.x, -vel[1] * tilt, 0.1);
 
     // Propellers
     const flying = data.state !== 'IDLE' && data.state !== 'LAND';
@@ -104,31 +110,32 @@ export class SimScene {
     // Turbine blades
     this.turbine.rotor.rotation.x += (0.4 + Math.hypot(wind[0] || 0, wind[2] || 0) * 0.8) * dt;
 
-    // Wind particles
+    // Wind particles (wind 为后端 z-up: three.z = -wind.y)
     const wp = this.windPts.geometry.attributes.position;
     for (let i = 0; i < wp.count; i++) {
       wp.array[i * 3] += (0.5 + (wind[0] || 0) * 3) * dt;
-      wp.array[i * 3 + 2] += (wind[2] || 0) * 3 * dt;
+      wp.array[i * 3 + 2] += -(wind[1] || 0) * 3 * dt;
       if (wp.array[i * 3] > 20) wp.array[i * 3] = -20;
       if (wp.array[i * 3 + 2] > 20) wp.array[i * 3 + 2] = -20;
       if (wp.array[i * 3 + 2] < -20) wp.array[i * 3 + 2] = 20;
     }
     wp.needsUpdate = true;
 
-    // Trail
+    // Trail (pos[2] 是后端 z-up 高度; 轨迹点转 three 坐标)
     this.trailT += dt;
-    if (this.trailT >= 0.1 && pos[1] > 0.05) {
+    if (this.trailT >= 0.1 && pos[2] > 0.05) {
       this.trailT = 0;
+      const tp2 = b2t(pos);
       if (this.trailN < CFG.TRAIL_MAX) {
-        this.trailPos[this.trailN * 3] = pos[0];
-        this.trailPos[this.trailN * 3 + 1] = pos[1];
-        this.trailPos[this.trailN * 3 + 2] = pos[2];
+        this.trailPos[this.trailN * 3] = tp2[0];
+        this.trailPos[this.trailN * 3 + 1] = tp2[1];
+        this.trailPos[this.trailN * 3 + 2] = tp2[2];
         this.trailN++;
       } else {
         this.trailPos.copyWithin(0, 3);
-        this.trailPos[(CFG.TRAIL_MAX - 1) * 3] = pos[0];
-        this.trailPos[(CFG.TRAIL_MAX - 1) * 3 + 1] = pos[1];
-        this.trailPos[(CFG.TRAIL_MAX - 1) * 3 + 2] = pos[2];
+        this.trailPos[(CFG.TRAIL_MAX - 1) * 3] = tp2[0];
+        this.trailPos[(CFG.TRAIL_MAX - 1) * 3 + 1] = tp2[1];
+        this.trailPos[(CFG.TRAIL_MAX - 1) * 3 + 2] = tp2[2];
       }
       this.trailGeo.attributes.position.needsUpdate = true;
       this.trailGeo.setDrawRange(0, this.trailN);
@@ -155,9 +162,10 @@ export class SimScene {
       if (data.state === 'IDLE') this.inspectMarker.visible = false;
     }
 
-    // Chase camera
+    // Chase camera (pos 转 three 坐标)
     if (this.chaseCam) {
-      const p = new THREE.Vector3(pos[0], pos[1], pos[2]);
+      const cp = b2t(pos);
+      const p = new THREE.Vector3(cp[0], cp[1], cp[2]);
       this.controls.target.copy(p);
       this.controls.target.y += 1;
       const chase = p.clone();
@@ -178,12 +186,14 @@ export class SimScene {
   }
 
   _drawMissionPath(fromPos) {
-    const t = CFG.TURBINE_POS;
-    const pts = [
-      new THREE.Vector3(fromPos[0], fromPos[1], fromPos[2]),
-      new THREE.Vector3(t[0] - 5, t[1] + 8, t[2] - 4),
-      new THREE.Vector3(t[0] - 2.6, t[1] + 8, t[2]),
+    const t = CFG.TURBINE_POS;  // 后端 z-up
+    // 巡检路径: 当前点 → 风机西侧接近点 → 塔面巡检点 (z-up 下先算好再转 three)
+    const raw = [
+      fromPos,
+      [t[0] - 5, t[1] - 8, 4.0],
+      [t[0] - 2.6, t[1], 4.2],
     ];
+    const pts = raw.map(p => { const q = b2t(p); return new THREE.Vector3(q[0], q[1], q[2]); });
     this.pathLine.geometry.setFromPoints(pts);
     this.pathLine.computeLineDistances();
     this.inspectMarker.position.copy(pts[pts.length - 1]);
@@ -191,9 +201,11 @@ export class SimScene {
   }
 
   _drawReturnPath(fromPos) {
+    const home = b2t([0, 0, 1.2]);
+    const f = b2t(fromPos);
     const pts = [
-      new THREE.Vector3(fromPos[0], fromPos[1], fromPos[2]),
-      new THREE.Vector3(0, 1.2, 0),
+      new THREE.Vector3(f[0], f[1], f[2]),
+      new THREE.Vector3(home[0], home[1], home[2]),
     ];
     this.pathLine.geometry.setFromPoints(pts);
     this.pathLine.computeLineDistances();

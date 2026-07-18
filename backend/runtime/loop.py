@@ -15,7 +15,14 @@ HOVER_HEIGHT = 1.2       # meters (z-up)
 CRUISE_SPEED = 1.5       # m/s horizontal
 VERTICAL_SPEED = 0.8     # m/s vertical
 BATTERY_DRAIN = 0.05     # percent per second when flying
-TURBINE_POS = np.array([9.0, 0.0, -2.0])  # turbine world position
+TURBINE_POS = np.array([9.0, 0.0, 0.0])   # turbine base center, z-up (z=0 地面)
+
+# 级联控制参数 (位置环 → 速度环 → 加速度/姿态指令)
+POS_TAU = 0.5            # 位置环时间常数 (s): 误差→期望速度
+VEL_TAU = 0.25           # 速度环时间常数 (s): 速度误差→期望加速度
+MAX_SPEED = 2.0          # 水平最大速度 (m/s)
+MAX_VSPEED = 1.0         # 垂直最大速度 (m/s)
+MAX_ACCEL = 3.0          # 最大加速度 (m/s²)
 
 
 class SimRuntime:
@@ -71,13 +78,24 @@ class SimRuntime:
         pos = self.quad.get_position()
         self._update_state(sim_dt, pos, keys)
 
-        # ---- Physics ----
+        # ---- Physics: 级联控制 (位置→速度→加速度→推力+期望姿态) ----
+        # 风在本帧只采样一次, 既作用于机体也用于前端显示
+        wind_f = self.wind.sample(sim_dt)
         if self._sim_state != "IDLE":
-            v_des = (self._target_pos - pos) / 0.3
-            v_cur = self.quad.get_velocity()
-            a_des = (v_des - v_cur) / 0.3
-            thrust = self.quad.mass * (a_des[2] + self.quad.g)  # z-up
-            self.quad.step(np.array([thrust, 0.0, 0.0, 0.0]))
+            vel = self.quad.get_velocity()
+            err = self._target_pos - pos
+            # 位置环: 误差 → 期望速度 (限幅)
+            v_des = np.clip(err / POS_TAU, -MAX_SPEED, MAX_SPEED)
+            v_des[2] = np.clip(v_des[2], -MAX_VSPEED, MAX_VSPEED)
+            # 速度环: 速度误差 → 期望加速度 (限幅)
+            a_des = np.clip((v_des - vel) / VEL_TAU, -MAX_ACCEL, MAX_ACCEL)
+            # 加速度指令 → 推力 + 期望倾角 (水平分力靠机身倾斜产生)
+            az_cmd = a_des[2] + self.quad.g
+            thrust = self.quad.mass * max(0.0, az_cmd)
+            pitch_des = float(np.arctan2(a_des[0], az_cmd))   # 前加速→低头
+            roll_des = float(np.arctan2(-a_des[1], az_cmd))   # 侧加速→侧倾
+            self.quad.step(np.array([thrust, roll_des, pitch_des, 0.0]),
+                           disturbance=wind_f, dt=sim_dt)
 
         # ---- Sensors + MissionController pipeline ----
         sensor_data = self.sensor.read_all(self.quad)
@@ -99,13 +117,12 @@ class SimRuntime:
             battery = max(0, battery - BATTERY_DRAIN * sim_dt)
             self.mc._battery = battery
 
-        # ---- Wind ----
-        wind_vec = self.wind.sample(sim_dt)
+        # ---- Wind (本帧已采样, 直接复用) ----
+        wind_vec = wind_f
 
         # ---- Detections (mock near turbine) ----
-        dist_t = float(np.linalg.norm(
-            np.array([pos[0], 0, pos[2]]) - np.array([TURBINE_POS[0], 0, TURBINE_POS[2]])
-        ))
+        # z-up: 水平面是 x-y, 距离不应混入高度 z
+        dist_t = float(np.linalg.norm(pos[:2] - TURBINE_POS[:2]))
         detections = []
         if self._sim_state in ("INSPECT", "NAVIGATE") and dist_t < 15:
             detections = [
@@ -204,6 +221,9 @@ class SimRuntime:
             if "KeyS" in keys: self._target_pos[0] -= step
             if "KeyA" in keys: self._target_pos[1] -= step  # z-up: Y = lateral
             if "KeyD" in keys: self._target_pos[1] += step
+            # 垂直升降 (helpbar 已标注 PgUp/PgDn, 之前漏了实现)
+            if "PageUp" in keys:   self._target_pos[2] += VERTICAL_SPEED * dt
+            if "PageDown" in keys: self._target_pos[2] -= VERTICAL_SPEED * dt
             self._target_pos[2] = max(0.3, min(5.0, self._target_pos[2]))
 
         elif self._sim_state == "NAVIGATE":
@@ -243,10 +263,11 @@ class SimRuntime:
                 self._target_pos = np.array([0.0, 0.0, 0.0])
                 self._add_log("IDLE", "Landed")
             else:
-                self._target_pos[2] = max(0.0, pos[2] - VERTICAL_SPEED * dt)
+                # 目标自身递减 (不能从 pos 重算, 否则参考系追着自己尾巴跑, 下降率趋零)
+                self._target_pos[2] = max(0.0, self._target_pos[2] - VERTICAL_SPEED * dt)
 
         elif self._sim_state == "EMERGENCY":
-            self._target_pos[2] = max(0.0, pos[2] - 3.0 * dt)
+            self._target_pos[2] = max(0.0, self._target_pos[2] - 3.0 * dt)
             if pos[2] <= 0.02:
                 self._sim_state = "IDLE"
                 self.quad.state[:] = 0.0

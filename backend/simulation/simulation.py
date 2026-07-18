@@ -63,7 +63,7 @@ class Simulation:
 
     布局: 左(遥测250px) | 中(3D场景) | 右(摄像机320x240)
 
-    控制: 空格=起飞  WASD=移动  方向键=升降  R=重置  Q=退出
+    控制: 空格=起飞/降落  WASD=移动  PgUp/PgDn=升降  方向键=机械臂  R=重置  Q=退出
 
     """
 
@@ -268,7 +268,7 @@ class Simulation:
 
         print("[SIM] 仿真启动 — 3栏布局 + EKF/Controller/SafetyGuard")
 
-        print("  空格=起飞  WASD=移动  方向键=升降  R=重置  Q=退出")
+        print("  空格=起飞/降落  WASD=移动  PgUp/PgDn=升降  方向键=机械臂  R=重置  Q=退出")
 
         print("  左面板=遥测数据  中=3D场景  右=摄像机画面")
 
@@ -296,13 +296,43 @@ class Simulation:
 
             self._update_target_from_keys()
 
-            # 3. 物理步进: 用 MissionController 的 velocity 更新位置
+            # 3. 物理步进: 速度指令经"加速度限制"一阶跟踪 + 风扰, 不再瞬移
 
             vel = self.quad.get_velocity()
 
-            self.quad.state[0:3] += vel * dt  # p += v*dt (简单的欧拉积分)
+            v_cmd = self._last_control  # 上一帧 MissionController 的速度指令 (m/s)
+
+            # 加速度限制: 速度不能瞬时跳变, 模拟推力饱和 → 有惯性手感
+
+            dv = v_cmd - vel
+
+            a_max = 3.0  # m/s²
+
+            dv_norm = np.linalg.norm(dv)
+
+            if dv_norm > a_max * dt:
+
+                dv *= (a_max * dt) / dv_norm
+
+            vel_new = vel + dv
+
+            # 风扰动: 飞行中风力转化为缓慢漂移 (F/m·dt)
+
+            if self.mc.state not in ("IDLE",):
+
+                vel_new = vel_new + (self.wind.sample(dt) / self.quad.mass) * dt * 0.3
+
+            self.quad.set_velocity(vel_new)
+
+            self.quad.state[0:3] += vel_new * dt  # p += v*dt
 
             self.quad.state[2] = max(0, self.quad.state[2])
+
+            # 姿态可视化: 由速度反推倾角 (前飞低头, 侧飞压坡)
+
+            self.quad.state[6] = float(np.clip(-vel_new[1] * 0.12, -0.4, 0.4))  # roll
+
+            self.quad.state[7] = float(np.clip(vel_new[0] * 0.12, -0.4, 0.4))   # pitch
 
             # 4. 传感器 + 委托MissionController运行完整流水线 (EKF/安全检查/状态机/控制器)
 
@@ -322,11 +352,9 @@ class Simulation:
 
             ctrl_cmps, state_dict = self.mc.update_with_external_data(
 
-                z, m_to_cm(pos), mps_to_cmps(vel), att)
+                z, m_to_cm(pos), mps_to_cmps(vel_new), att)
 
             self._last_control = cmps_to_mps(ctrl_cmps)
-
-            self.quad.set_velocity(self._last_control)
 
             # 5. 电池消耗
 

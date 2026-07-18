@@ -6,7 +6,7 @@
 // =============================================================================
 import * as THREE from 'three';
 
-export const SCALE = 30;                 // visual scale-up (was 10, too small)
+export const SCALE = 30;                 // visual scale-up (×30, 毫米→场景单位)
 export const MM = 0.001 * SCALE;         // 1mm → scene units (0.03)
 
 // ---------- 材质库 ----------
