@@ -117,3 +117,5 @@ body.emergency #t-state { color: #ff5555; animation: blink 0.5s infinite alterna
 }
 #t-hgt { font-size: 10px; color: #7fa8c8; }
 .v.err { color: #ff4444 !important; }
+
+#offline-badge { animation: blink 0.8s infinite alternate; }

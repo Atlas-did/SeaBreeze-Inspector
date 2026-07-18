@@ -1,10 +1,12 @@
-﻿#!/usr/bin/env python
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
+"""SeaBreeze HTTP Bridge v2 — Python backend driving Three.js frontend
+
+Run:   python backend/simulation/http_bridge.py
+Open:  http://localhost:8800
+Press: SPACE=takeoff, WASD=move, Arrows=arm, M=mission, R=reset, E=emergency
 """
-SeaBreeze HTTP Bridge - Python backend drives Three.js frontend
-Run: python backend/simulation/http_bridge.py
-Then open: http://localhost:8800
-"""
+
 import http.server
 import json
 import os
@@ -14,288 +16,334 @@ import time
 import urllib.parse
 import numpy as np
 
-# Ensure project root is on path
 _PROJ_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if _PROJ_ROOT not in sys.path:
     sys.path.insert(0, _PROJ_ROOT)
 
 from backend.simulation.models import Quadrotor3D, WindDisturbance, RobotArm3DOF, VirtualSensor
 from backend.main import MissionController
-from backend.utils.units import m_to_cm, cm_to_m, mps_to_cmps, cmps_to_mps
 
 # ---- Config ----
 HOVER_HEIGHT = 1.2
+CRUISE_SPEED = 1.5
+VERTICAL_SPEED = 0.8
 SIM_DT = 0.02
-STATE_UPDATE_HZ = 20
+BATTERY_DRAIN = 0.05
+TURBINE_POS = np.array([9.0, 0.0, -2.0])
 
-# ---- Simulation State (shared between threads) ----
+# ---- Shared state ----
 sim_state = {
-    "pos": [0.0, 0.0, 0.0],
-    "vel": [0.0, 0.0, 0.0],
-    "state": "IDLE",
-    "battery": 100,
-    "wind": [0.0, 0.0, 0.0],
-    "arm_angles": [90.0, 90.0, 45.0],
-    "arm_endpoint": [0.0, 0.0, 0.0],
-    "ekf_mahal": 0.0,
-    "safety_tier": "NOMINAL",
-    "detections": [],
-    "fps": 0,
-    "flight_log": [],
+    "pos": [0, 0, 0], "vel": [0, 0, 0], "state": "IDLE",
+    "battery": 100, "wind": [0, 0, 0], "arm_angles": [90, 90, 45],
+    "arm_endpoint": [0, 0, 0], "ekf_mahal": 0, "safety_tier": "NOMINAL",
+    "detections": [], "fps": 0, "flight_log": [],
 }
 sim_lock = threading.Lock()
 pending_keys = set()
 key_lock = threading.Lock()
 
 # ---- Backend objects ----
-quad = Quadrotor3D()
-wind = WindDisturbance(
-    base_wind=np.array([0.05, 0.02, 0.0]),
-    freq=0.5, gust_amp=0.03
-)
+quad = Quadrotor3D(dt=SIM_DT)  # match sim loop rate
+wind_model = WindDisturbance(base_wind=np.array([0.08, 0.03, 0.05]), freq=0.3, gust_amp=0.06)
 arm = RobotArm3DOF()
 sensor = VirtualSensor()
+
 mc = MissionController(mode="simulation", mock=True)
 mc.safety_guard.THRESHOLDS["timeout_land"] = 3600.0
 mc.safety_guard.THRESHOLDS["timeout_kill"] = 3600.0
 
-_target = np.array([3.0, HOVER_HEIGHT, 15.0])
-_last_ctrl = np.zeros(3)
-_log = []
+_sim_state = "IDLE"
+_target_pos = np.array([0.0, 0.0, 0.0])
+_flight_log = []
+_mission_timer = 0.0
+_last_time = time.time()
+
+
+def _add_log(event, detail=""):
+    _flight_log.append({"t": time.time(), "event": event, "detail": detail})
+    if len(_flight_log) > 200:
+        _flight_log.pop(0)
+
 
 def run_simulation():
-    """Background thread: physics + EKF + controller loop"""
-    global _target, _last_ctrl, sim_state
-    fps_acc = 0.0
-    fps_n = 0
-    log_timer = 0.0
+    global _sim_state, _target_pos, _mission_timer, _last_time
+    _last_time = time.time()  # reset on start, not module load
+    fps_n, fps_t = 0, time.time()
+    _add_log("SIM_INIT", "Bridge started")
 
     while True:
-        t0 = time.time()
+        t_start = time.time()
+        dt_real = t_start - _last_time
+        _last_time = t_start
+        dt = min(SIM_DT, max(0.001, dt_real))  # cap at SIM_DT to prevent first-frame explosion
 
-        # Process pending keys
+        # ---- Drain pending keys ----
         with key_lock:
             keys = pending_keys.copy()
             pending_keys.clear()
 
-        state_str = str(mc.state)
-
-        # Key handling
+        # ---- State machine ----
         if "Space" in keys:
-            if state_str == "IDLE" or state_str == "MissionState.IDLE":
-                mc.takeoff(height=HOVER_HEIGHT * 100)
-                quad.state[2] = HOVER_HEIGHT
-                quad.set_velocity(np.zeros(3))
-                _target = quad.get_position().copy()
-                _log.append({"t": time.time(), "event": "TAKEOFF", "detail": "Hover at %.1fm" % HOVER_HEIGHT})
-            else:
-                mc.request_state("LAND", "manual")
-                _target[1] = 0.0
-                _log.append({"t": time.time(), "event": "LAND"})
+            if _sim_state == "IDLE":
+                _sim_state = "TAKING_OFF"
+                _target_pos = quad.get_position().copy()
+                _target_pos[1] = HOVER_HEIGHT
+                _add_log("TAKEOFF", "Target: {}m".format(HOVER_HEIGHT))
+            elif _sim_state in ("HOVERING", "NAVIGATE", "INSPECT"):
+                _sim_state = "LANDING"
+                _target_pos = quad.get_position().copy()
+                _target_pos[1] = 0.0
+                _add_log("LAND", "Manual land")
 
         if "KeyR" in keys:
-            mc.request_state("IDLE", "reset")
+            _sim_state = "IDLE"
             quad.state[:] = 0.0
             quad.set_velocity(np.zeros(3))
-            quad.state[2] = 0.0
-            _target = np.array([3.0, HOVER_HEIGHT, 15.0])
-            arm.set_angles([90.0, 90.0, 45.0])
-            mc.ekf.reset()
-            _log.clear()
-            _log.append({"t": time.time(), "event": "RESET"})
+            _target_pos = np.array([0.0, 0.0, 0.0])
+            arm.set_angles([90, 90, 45])
+            _flight_log.clear()
+            _add_log("RESET", "Reset")
 
         if "KeyE" in keys:
-            mc.request_state("EMERGENCY", "manual")
-            _log.append({"t": time.time(), "event": "EMERGENCY"})
+            _sim_state = "EMERGENCY"
+            _add_log("EMERGENCY", "Manual trigger")
 
-        if "KeyM" in keys and state_str in ("HOVERING",):
-            mc.request_state("NAVIGATE", "mission")
-            _target = np.array([3.0, HOVER_HEIGHT, 15.0])
-            _log.append({"t": time.time(), "event": "MISSION_START", "detail": "Inspecting turbine"})
+        if "KeyM" in keys and _sim_state == "HOVERING":
+            _sim_state = "NAVIGATE"
+            _target_pos = TURBINE_POS.copy()
+            _target_pos[1] = HOVER_HEIGHT + 3.0
+            _mission_timer = 0.0
+            _add_log("MISSION", "Navigating")
 
-        # WASD control (only in HOVERING)
-        if state_str == "HOVERING":
-            step = 0.03
-            if "KeyW" in keys: _target[0] += step
-            if "KeyS" in keys: _target[0] -= step
-            if "KeyA" in keys: _target[2] += step
-            if "KeyD" in keys: _target[2] -= step
-
-        # Arrow keys for arm
-        delta = 3
+        # Arm control
+        delta = 3.0
         angles = arm.angles.copy()
-        if "ArrowLeft" in keys: angles[0] = (angles[0] - delta) % 180
+        if "ArrowLeft" in keys:  angles[0] = (angles[0] - delta) % 180
         if "ArrowRight" in keys: angles[0] = (angles[0] + delta) % 180
-        if "ArrowUp" in keys: angles[1] = min(150, angles[1] + delta)
-        if "ArrowDown" in keys: angles[1] = max(30, angles[1] - delta)
+        if "ArrowUp" in keys and "ArrowLeft" not in keys and "ArrowRight" not in keys:
+            angles[1] = min(150, angles[1] + delta)
+        if "ArrowDown" in keys and "ArrowLeft" not in keys and "ArrowRight" not in keys:
+            angles[1] = max(30, angles[1] - delta)
         if not np.array_equal(angles, arm.angles):
             arm.set_angles(angles)
 
-        # Physics
-        wind_vec = wind.sample(SIM_DT)
-        if state_str not in ("IDLE", "EMERGENCY", "MissionState.IDLE"):
-            v_des = _last_ctrl
-            v_cur = quad.get_velocity()
-            a_des = (v_des - v_cur) / 0.3
-            thrust = quad.mass * (a_des[1] + quad.g)
-            quad.step(np.array([thrust, 0.0, 0.0, 0.0]), disturbance=wind_vec)
-
-        # EKF + Controller
-        if state_str not in ("IDLE", "EMERGENCY", "MissionState.IDLE"):
-            sensor_data = sensor.read_all(quad)
-            z = np.array([sensor_data["imu"][0], sensor_data["imu"][1], sensor_data["imu"][2],
-                          sensor_data["optical"][0], sensor_data["optical"][1], sensor_data["barometer"]])
-            pos = quad.get_position()
-            vel = quad.get_velocity()
-            att = quad.get_attitude()
-            ctrl_cmps, state_dict = mc.update_with_external_data(
-                z, m_to_cm(pos), mps_to_cmps(vel), att
-            )
-            _last_ctrl = cmps_to_mps(ctrl_cmps)
-            quad.set_velocity(_last_ctrl)
-
-        # Battery
-        mc._battery -= SIM_DT * (1.5 if state_str == "HOVERING" else 0.1)
-        mc._battery = max(0, mc._battery)
-
-        # Emergency check
-        if mc._battery < 20 and state_str not in ("EMERGENCY", "IDLE"):
-            mc.request_state("EMERGENCY", "low_battery")
-            _log.append({"t": time.time(), "event": "LOW_BATTERY", "detail": "%.0f%%" % mc._battery})
-
-        # Update shared state
+        # ---- State logic ----
         pos = quad.get_position()
         vel = quad.get_velocity()
-        ep = arm.get_endpoint()
 
+        if _sim_state == "TAKING_OFF":
+            if pos[1] >= HOVER_HEIGHT - 0.05:
+                _sim_state = "HOVERING"
+                quad.set_velocity(np.zeros(3))
+                _add_log("HOVERING", "Hover achieved")
+            else:
+                _target_pos = pos.copy()
+                _target_pos[1] = HOVER_HEIGHT
+
+        elif _sim_state == "HOVERING":
+            step = CRUISE_SPEED * dt
+            if "KeyW" in keys: _target_pos[0] += step
+            if "KeyS" in keys: _target_pos[0] -= step
+            if "KeyA" in keys: _target_pos[2] -= step
+            if "KeyD" in keys: _target_pos[2] += step
+            # Clamp height
+            if "KeyU" in keys:      # U = up (alternative to PgUp)
+                _target_pos[1] += VERTICAL_SPEED * dt
+            if "KeyJ" in keys:      # J = down (alternative to PgDn)
+                _target_pos[1] -= VERTICAL_SPEED * dt
+            _target_pos[1] = max(0.3, min(5.0, _target_pos[1]))
+
+        elif _sim_state == "NAVIGATE":
+            _mission_timer += dt
+            diff = _target_pos - pos
+            dist = float(np.linalg.norm(diff))
+            if dist < 0.5:
+                _sim_state = "INSPECT"
+                _mission_timer = 0.0
+                _add_log("INSPECT", "Arrived")
+            elif dist > 0:
+                _target_pos = pos + (diff / dist) * CRUISE_SPEED * dt * 0.8
+
+        elif _sim_state == "INSPECT":
+            _mission_timer += dt
+            if _mission_timer > 8.0:
+                _sim_state = "RETURNING"
+                _target_pos = np.array([0.0, HOVER_HEIGHT, 0.0])
+                _add_log("RETURN", "Done")
+
+        elif _sim_state == "RETURNING":
+            diff = np.array([0.0, HOVER_HEIGHT, 0.0]) - pos
+            dist = float(np.linalg.norm(diff))
+            if dist < 0.5:
+                _sim_state = "LANDING"
+                _target_pos = np.array([0.0, 0.0, 0.0])
+                _add_log("LAND", "Home reached")
+            elif dist > 0:
+                _target_pos = pos + (diff / dist) * CRUISE_SPEED * dt * 0.8
+
+        elif _sim_state == "LANDING":
+            if pos[1] <= 0.05:
+                _sim_state = "IDLE"
+                quad.state[:] = 0.0
+                quad.set_velocity(np.zeros(3))
+                _target_pos = np.array([0.0, 0.0, 0.0])
+                _add_log("IDLE", "Landed")
+            else:
+                _target_pos = pos.copy()
+                _target_pos[1] = max(0.0, pos[1] - VERTICAL_SPEED * dt)
+
+        elif _sim_state == "EMERGENCY":
+            _target_pos = pos.copy()
+            _target_pos[1] = max(0.0, pos[1] - 3.0 * dt)
+            if pos[1] <= 0.02:
+                _sim_state = "IDLE"
+                quad.state[:] = 0.0
+                quad.set_velocity(np.zeros(3))
+                _add_log("IDLE", "Emergency done")
+
+        # ---- Physics: PD-like control ----
+        if _sim_state != "IDLE":
+            v_des = (_target_pos - pos) / 0.3
+            a_des = (v_des - vel) / 0.3
+            thrust = quad.mass * (a_des[1] + quad.g)
+            quad.step(np.array([thrust, 0.0, 0.0, 0.0]))
+
+            # EKF — use correct predict signature
+            if _sim_state not in ("EMERGENCY",):
+                try:
+                    sd = sensor.read_all(quad)
+                    mc.ekf.predict(u=np.zeros(3))
+                    z = np.array([sd["imu"][0], sd["imu"][1], sd["imu"][2],
+                                  sd["optical"][0], sd["optical"][1], sd["barometer"]])
+                    mc.ekf.update(z)
+                except Exception:
+                    pass
+
+        # ---- Battery ----
+        bat = float(mc._battery)
+        if _sim_state not in ("IDLE", "EMERGENCY"):
+            bat = max(0, bat - BATTERY_DRAIN * dt)
+            mc._battery = bat
+
+        # ---- Wind ----
+        w = wind_model.sample(dt)
+
+        # ---- Mock detections ----
+        dist_t = float(np.linalg.norm(np.array([pos[0], 0, pos[2]]) -
+                                       np.array([TURBINE_POS[0], 0, TURBINE_POS[2]])))
+        dets = []
+        if _sim_state in ("INSPECT", "NAVIGATE") and dist_t < 15:
+            dets = [{"cls": "crack", "conf": 0.82, "bbox": [100, 30, 50, 25]},
+                     {"cls": "corrosion", "conf": 0.71, "bbox": [140, 70, 55, 30]}]
+            if dist_t < 6:
+                dets.append({"cls": "rust", "conf": 0.65, "bbox": [120, 120, 40, 22]})
+
+        # ---- Endpoint ----
+        ep = np.array(arm.get_endpoint()) * 1000  # m -> mm
+
+        # ---- Publish ----
         with sim_lock:
             sim_state["pos"] = pos.tolist()
             sim_state["vel"] = vel.tolist()
-            sim_state["state"] = str(mc.state).replace("MissionState.", "")
-            sim_state["battery"] = float(mc._battery)
-            sim_state["wind"] = wind_vec.tolist()
+            sim_state["state"] = _sim_state
+            sim_state["battery"] = round(bat, 1)
+            sim_state["wind"] = w.tolist()
             sim_state["arm_angles"] = arm.angles.tolist()
-            sim_state["arm_endpoint"] = (np.array(ep) * 1000).tolist()  # m -> mm
-            sim_state["ekf_mahal"] = float(mc.ekf.mahalanobis_distance)
-            sim_state["safety_tier"] = (
-                "EMERGENCY" if mc._emergency_reason else
-                "WARN" if mc._battery < 30 else "NOMINAL"
-            )
-            sim_state["flight_log"] = list(_log[-100:])
+            sim_state["arm_endpoint"] = [round(float(v), 1) for v in ep]
+            sim_state["ekf_mahal"] = round(float(mc.ekf.mahalanobis_distance), 1)
+            sim_state["safety_tier"] = "EMERGENCY" if _sim_state == "EMERGENCY" else \
+                                       "WARN" if bat < 30 else "NOMINAL"
+            sim_state["detections"] = dets
+            sim_state["flight_log"] = list(_flight_log[-100:])
 
-        # FPS
-        fps_acc += time.time() - t0
+        # ---- FPS ----
         fps_n += 1
-        if fps_acc >= 0.5:
+        if time.time() - fps_t >= 0.5:
             with sim_lock:
-                sim_state["fps"] = round(fps_n / fps_acc)
-            fps_acc = 0.0
-            fps_n = 0
+                sim_state["fps"] = round(fps_n / (time.time() - fps_t))
+            fps_n, fps_t = 0, time.time()
 
-        # Sleep to maintain rate
-        elapsed = time.time() - t0
-        sleep_time = max(0, SIM_DT - elapsed)
-        time.sleep(sleep_time)
+        # ---- Sleep ----
+        elapsed = time.time() - t_start
+        time.sleep(max(0.001, SIM_DT - elapsed))
+
+
+# ---- HTTP Handler ----
+_THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+_STATIC_DIR = os.path.normpath(os.path.join(_THIS_DIR, "..", "..", "seabreeze-3d-sim"))
 
 
 class BridgeHandler(http.server.SimpleHTTPRequestHandler):
-    """Serves static files + API endpoints"""
-
     def __init__(self, *args, **kwargs):
-        # Serve from seabreeze-3d-sim directory
-        self.directory = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-                                      "seabreeze-3d-sim")
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, directory=_STATIC_DIR, **kwargs)
 
     def do_GET(self):
-        parsed = urllib.parse.urlparse(self.path)
+        p = urllib.parse.urlparse(self.path)
 
-        if parsed.path == "/api/state":
-            # Return simulation state as JSON
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Access-Control-Allow-Origin", "*")
-            self.send_header("Cache-Control", "no-cache")
-            self.end_headers()
+        if p.path == "/api/state":
             with sim_lock:
                 data = dict(sim_state)
-            self.wfile.write(json.dumps(data).encode("utf-8"))
+            self._json(data)
             return
 
-        if parsed.path == "/api/command":
-            # Handle keyboard command
-            params = urllib.parse.parse_qs(parsed.query)
-            key = params.get("key", [None])[0]
-
-            # Arm angle preset from sliders
-            if key == "arm":
-                try:
-                    a0 = float(params.get("a0", [90])[0])
-                    a1 = float(params.get("a1", [90])[0])
-                    a2 = float(params.get("a2", [45])[0])
-                    arm.set_angles([a0, a1, a2])
-                except Exception:
-                    pass
-                self.send_response(200)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Access-Control-Allow-Origin", "*")
-                self.end_headers()
-                self.wfile.write(b'{"ok": true}')
-                return
+        if p.path == "/api/command":
+            qs = urllib.parse.parse_qs(p.query)
+            key = qs.get("key", [None])[0]
             if key:
                 with key_lock:
                     pending_keys.add(key)
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Access-Control-Allow-Origin", "*")
-            self.end_headers()
-            self.wfile.write(b'{"ok": true}')
+                # Handle arm sliders via URL params
+                try:
+                    a0 = float(qs.get("a0", [90])[0])
+                    a1 = float(qs.get("a1", [90])[0])
+                    a2 = float(qs.get("a2", [45])[0])
+                    arm.set_angles([a0, a1, a2])
+                except Exception:
+                    pass
+            self._json({"ok": True})
             return
 
-        if parsed.path == "/api/log":
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.send_header("Access-Control-Allow-Origin", "*")
-            self.end_headers()
+        if p.path == "/api/log":
             with sim_lock:
-                log_data = sim_state.get("flight_log", [])
-            self.wfile.write(json.dumps(log_data).encode("utf-8"))
+                log = sim_state.get("flight_log", [])
+            self._json(log)
             return
 
-        # Serve static files
+        # Static file
         super().do_GET()
 
-    def log_message(self, format, *args):
-        # Suppress default logging noise
-        if "/api/" in str(args[0]) or "200" in str(args[0]):
+    def _json(self, data):
+        body = json.dumps(data, ensure_ascii=False).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, fmt, *args):
+        if args and "/api/" in str(args[0]):
             return
-        super().log_message(format, *args)
+        super().log_message(fmt, *args)
 
 
 def main():
-    # Start simulation thread
-    sim_thread = threading.Thread(target=run_simulation, daemon=True)
-    sim_thread.start()
-    time.sleep(0.5)  # Let simulation init
+    t = threading.Thread(target=run_simulation, daemon=True, name="sim")
+    t.start()
+    time.sleep(0.3)
 
-    # Start HTTP server
     port = 8800
-    server = http.server.HTTPServer(("0.0.0.0", port), BridgeHandler)
-    print(f"\n{'='*60}")
-    print(f"  SeaBreeze Inspector - HTTP Bridge")
-    print(f"  Backend: MissionController + EKF + SafetyGuard")
-    print(f"  Frontend: Three.js 3D Visualization")
-    print(f"  Open: http://localhost:{port}")
-    print(f"{'='*60}\n")
-    print(f"  [Space]=Takeoff/Land  [WASD]=Move  [M]=Mission")
-    print(f"  [E]=Emergency  [R]=Reset  [Arrows]=Arm")
-    print(f"  Flight log: http://localhost:{port}/api/log\n")
-
+    srv = http.server.HTTPServer(("0.0.0.0", port), BridgeHandler)
+    print("=" * 60)
+    print("  SeaBreeze Inspector — HTTP Bridge v2")
+    print("  Open: http://localhost:{}".format(port))
+    print("  [SPACE] Takeoff [WASD] Move [M] Mission [R] Reset [E] Emergency")
+    print("=" * 60)
     try:
-        server.serve_forever()
+        srv.serve_forever()
     except KeyboardInterrupt:
-        print("\nShutting down...")
-        server.shutdown()
+        srv.shutdown()
+        print("\nBridge stopped.")
 
 
 if __name__ == "__main__":

@@ -1,216 +1,223 @@
+﻿// SeaBreeze Inspector - HUD (telemetry + camera + arm panel)
+// Single update(data) entry point, camera redraws at 10Hz
 // =============================================================================
-// HUD — DOM 面板绑定 (遥测 + 机械臂滑块)
-// =============================================================================
-import * as THREE from 'three';
+import { CFG } from './config.js';
+import { backend } from './api.js';
 
 const $ = (id) => document.getElementById(id);
 
 export class HUD {
-  constructor(arm, input) {
-    this.arm = arm;
-    this.input = input;
-    this._fpsAcc = 0; this._fpsN = 0; this._fps = 60;
-    this._eeTmp = new THREE.Vector3();
-    this._bindSliders();
-    this._bindPresets();
-    this._camCanvas = document.getElementById('cam-canvas');
-    this._camCtx = this._camCanvas ? this._camCanvas.getContext('2d') : null;
-    this._camOverlay = document.getElementById('cam-overlay');
-    this._detList = document.getElementById('det-list');
-    this._detTimer = 0;
+  constructor() {
+    this._fpsAcc = 0; this._fpsN = 0;
+    this._camTimer = 0;
+    this._camCtx = null;
     this._mockDets = [];
+    this._prevArm = [90, 90, 45];
+    this._initSliders();
+    this._initBadge();
     this._initCamera();
   }
 
-  _initCamera() {
-    if (!this._camCtx) return;
-    this._camCtx.fillStyle = '#0a2a15';
-    this._camCtx.fillRect(0, 0, 300, 220);
-    this._camCtx.fillStyle = '#4dd0a0';
-    this._camCtx.font = '12px monospace';
-    this._camCtx.fillText('CAMERA FEED', 100, 110);
+  // ---- Offline badge ----
+  _initBadge() {
+    this._badge = document.createElement('div');
+    this._badge.id = 'offline-badge';
+    this._badge.style.cssText = 'position:fixed;top:0;left:50%;transform:translateX(-50%);padding:4px 16px;' +
+      'background:#c83737;color:#fff;font:12px monospace;z-index:100;border-radius:0 0 6px 6px;display:none;';
+    this._badge.textContent = 'BACKEND OFFLINE';
+    document.body.appendChild(this._badge);
   }
 
-  _bindSliders() {
-    const lims = [[0, 180], [15, 165], [0, 180]];
+  // ---- Camera canvas init ----
+  _initCamera() {
+    const canvas = $('cam-canvas');
+    if (!canvas) return;
+    this._camCtx = canvas.getContext('2d');
+    this._camCtx.fillStyle = '#0a0a0a';
+    this._camCtx.fillRect(0, 0, 300, 220);
+  }
+
+  // ---- Slider bindings with bidirectional sync ----
+  _initSliders() {
     for (let i = 0; i < 3; i++) {
-      const el = $(`j${i}`);
+      const el = $('j' + i);
+      if (!el) continue;
       el.addEventListener('input', () => {
-        this.input.angles[i] = parseFloat(el.value);
-        this.arm.setAngles(...this.input.angles);
+        const a0 = parseFloat($('j0').value);
+        const a1 = parseFloat($('j1').value);
+        const a2 = parseFloat($('j2').value);
+        backend.sendArm([a0, a1, a2], false);
         this._label(i);
       });
+      el.addEventListener('change', () => {
+        const a0 = parseFloat($('j0').value);
+        const a1 = parseFloat($('j1').value);
+        const a2 = parseFloat($('j2').value);
+        backend.sendArm([a0, a1, a2], true); // force flush on release
+      });
     }
-  }
-
-  _bindPresets() {
-    document.querySelectorAll('#arm-panel .btn-row button').forEach((btn) => {
+    // Presets
+    document.querySelectorAll('#arm-panel .btn-row button').forEach(btn => {
       btn.addEventListener('click', () => {
         const p = btn.dataset.preset.split(',').map(Number);
-        this.input.angles = p;
-        this.arm.setAngles(...p);
-        this.syncSliders(p);
+        $('j0').value = p[0]; $('j1').value = p[1]; $('j2').value = p[2];
+        for (let i = 0; i < 3; i++) this._label(i);
+        backend.sendArm(p, true);
       });
     });
   }
 
-  _label(i) { $(`j${i}-v`).textContent = `${Math.round(this.input.angles[i])}°`; }
+  _label(i) {
+    const el = $('j' + i + '-v');
+    if (el) el.textContent = Math.round(parseFloat($('j' + i).value)) + ' deg';
+  }
 
-  syncSliders(angles) {
+  /** Sync slider UI from backend data (only when user is not dragging) */
+  _syncSliders(angles) {
     for (let i = 0; i < 3; i++) {
-      $(`j${i}`).value = angles[i];
-      this._label(i);
+      const slider = $('j' + i);
+      if (!slider) continue;
+      if (document.activeElement !== slider) {
+        slider.value = angles[i];
+        this._label(i);
+      }
     }
+    this._prevArm = [...angles];
   }
 
-  update(sim, droneGroup, turbinePos, dt) {
-    // FPS (每 30 帧更新一次显示)
-    this._fpsAcc += dt; this._fpsN++;
-    if (this._fpsAcc >= 0.5) {
-      this._fps = Math.round(this._fpsN / this._fpsAcc);
-      this._fpsAcc = 0; this._fpsN = 0;
-      $('t-fps').textContent = this._fps;
+  // ---- Main update ----
+  update(data, dt) {
+    if (!data) return;
+
+    // Offline badge
+    this._badge.style.display = backend.isOnline() ? 'none' : 'block';
+    if (!backend.isOnline()) {
+      this._badge.style.background = '#c83737';
     }
 
-    $('t-state').textContent = sim.state;
-    $('t-batt').textContent = `${Math.round(sim.battery)}%`;
+    // FPS (from backend)
+    this._fpsAcc += dt; this._fpsN++;
+    if (this._fpsAcc >= 0.5) {
+      const el = $('t-fps');
+      if (el) el.textContent = data.fps || 0;
+      this._fpsAcc = 0; this._fpsN = 0;
+    }
+
+    // Core telemetry
+    const set = (id, val) => { const e = $(id); if (e) e.textContent = val; };
+    set('t-state', data.state || 'IDLE');
+    set('t-batt', Math.round(data.battery || 100) + '%');
     const bar = $('t-batt-bar');
-    bar.style.width = `${sim.battery}%`;
-    bar.classList.toggle('low', sim.battery < 20);
+    if (bar) { bar.style.width = (data.battery || 100) + '%'; bar.classList.toggle('low', (data.battery || 100) < 20); }
 
-    const f = (v) => `[${v.x.toFixed(1)}, ${v.y.toFixed(1)}, ${v.z.toFixed(1)}]`;
-    $('t-pos').textContent = f(sim.pos);
-    $('t-vel').textContent = f(sim.vel);
-    $('t-wind').textContent = `[${sim.wind.x.toFixed(2)}, ${sim.wind.z.toFixed(2)}]`;
-    $('t-dist').textContent = `${Math.hypot(data.pos[0] - turbinePos.x, data.pos[2] - turbinePos.z).toFixed(1)} m`;
-    $('t-target').textContent = sim.state === 'HOVERING' || sim.state === 'NAVIGATE' ? f(sim.target) : '—';
+    const f3 = (v) => v ? '[' + v[0].toFixed(1) + ', ' + v[1].toFixed(1) + ', ' + v[2].toFixed(1) + ']' : '[0,0,0]';
+    set('t-pos', f3(data.pos));
+    set('t-vel', f3(data.vel));
+    set('t-wind', '[' + ((data.wind ? data.wind[0] : 0).toFixed(2)) + ', ' + ((data.wind ? data.wind[2] : 0).toFixed(2)) + ']');
 
-    var stEl = $('t-safety-tier');
-    if (stEl) {
-      if (sim._emergency) { stEl.textContent = 'EMERGENCY'; stEl.className = 'v err'; }
-      else if (sim.battery < 15) { stEl.textContent = 'WARN-LOW'; stEl.className = 'v warn'; }
-      else if (sim.battery < 30) { stEl.textContent = 'WARN'; stEl.className = 'v warn'; }
-      else { stEl.textContent = 'NOMINAL'; stEl.className = 'v ok'; }
+    if (data.pos) {
+      const t = CFG.TURBINE_POS;
+      set('t-dist', Math.hypot(data.pos[0] - t[0], data.pos[2] - t[2]).toFixed(1) + ' m');
     }
-
-    // 末端执行器世界坐标 (FK 验证: 与 04 文档 §4 一致)
-    this.arm.ee.getWorldPosition(this._eeTmp);
-    const mm = this._eeTmp.multiplyScalar(100);   // 场景单位→mm (×0.01→mm 的倒数)
-    $('t-ee').textContent = `[${mm.x.toFixed(0)}, ${mm.y.toFixed(0)}, ${mm.z.toFixed(0)}] mm`;
-  }
-
-  /** Update from Python backend API data */
-  updateFromAPI(data, turbinePos, dt) {
-    this._fpsAcc += dt; this._fpsN++;
-    if (this._fpsAcc >= 0.5) {
-      t-fps.textContent = data.fps || 60;
-      this._fpsAcc = 0; this._fpsN = 0;
-    }
-
-    t-state.textContent = data.state || 'IDLE';
-    t-batt.textContent = Math.round(data.battery || 100) + '%';
-    var bar = t-batt-bar;
-    bar.style.width = (data.battery || 100) + '%';
-    bar.classList.toggle('low', (data.battery || 100) < 20);
-
-    var f3 = function(v) {
-      if (!v || v.length < 3) return '[0,0,0]';
-      return '[' + v[0].toFixed(1) + ', ' + v[1].toFixed(1) + ', ' + v[2].toFixed(1) + ']';
-    };
-    t-pos.textContent = f3(data.pos);
-    t-vel.textContent = f3(data.vel);
-    t-wind.textContent = '[' + (data.wind ? data.wind[0].toFixed(2) : '0.00') + ', ' + (data.wind ? data.wind[2].toFixed(2) : '0.00') + ']';
-
-    if (turbinePos && data.pos) {
-      var dx = data.pos[0] - turbinePos.x;
-      var dz = data.pos[2] - turbinePos.z;
-      t-dist.textContent = Math.hypot(dx, dz).toFixed(1) + ' m';
-    }
-
-    t-target.textContent = (data.state === 'HOVERING' || data.state === 'NAVIGATE') ? f3(data.pos) : '--';
+    set('t-target', (data.state === 'HOVERING' || data.state === 'NAVIGATE') ? f3(data.pos) : '--');
 
     // EKF
-    var mahal = data.ekf_mahal || 0;
-    t-ekf.textContent = 'D=' + mahal.toFixed(1);
-    t-ekf.className = 'v ' + (mahal < 5 ? 'ok' : mahal < 10 ? 'warn' : 'err');
-
-    // Safety
-    var st = data.safety_tier || 'NOMINAL';
-    t-safety-tier.textContent = st;
-    t-safety-tier.className = 'v ' + (st === 'EMERGENCY' ? 'err' : st === 'WARN' ? 'warn' : 'ok');
-
-    // EE
-    if (data.arm_endpoint) {
-      t-ee.textContent = '[' + data.arm_endpoint.map(function(v) { return Math.round(v); }).join(', ') + '] mm';
+    const mahal = data.ekf_mahal || 0;
+    const ekfEl = $('t-ekf');
+    if (ekfEl) {
+      ekfEl.textContent = 'D=' + mahal.toFixed(1);
+      ekfEl.className = 'v ' + (mahal < CFG.EKF_OK ? 'ok' : mahal < CFG.EKF_WARN ? 'warn' : 'err');
     }
 
-    // Camera + detections
-    this._detTimer += dt;
-    if (this._detTimer > 1.0) {
-      this._detTimer = 0;
-      this._updateCamera(data, null, turbinePos);
+    // Safety tier
+    const st = data.safety_tier || 'NOMINAL';
+    const stEl = $('t-safety-tier');
+    if (stEl) {
+      stEl.textContent = st;
+      stEl.className = 'v ' + (st === 'EMERGENCY' ? 'err' : st.includes('WARN') ? 'warn' : 'ok');
+    }
+
+    // End effector
+    if (data.arm_endpoint) {
+      set('t-ee', '[' + data.arm_endpoint.map(Math.round).join(', ') + '] mm');
+    }
+
+    // Slider sync
+    if (data.arm_angles) this._syncSliders(data.arm_angles);
+
+    // Camera redraw (at CAMERA_FPS rate)
+    this._camTimer += dt;
+    if (this._camTimer >= 1 / CFG.CAMERA_FPS) {
+      this._camTimer = 0;
+      this._renderCamera(data);
     }
   }
 
-    _updateCamera(data, droneGroup, turbinePos) {
-    if (!this._camCtx) return;
-    var ctx = this._camCtx;
-    var W = 300, H = 220;
+  // ---- Camera canvas rendering ----
+  _renderCamera(data) {
+    const ctx = this._camCtx;
+    if (!ctx) return;
+    const W = 300, H = 220;
 
-    // Dark background
+    // Background
     ctx.fillStyle = '#0a0a0a';
     ctx.fillRect(0, 0, W, H);
 
-    // Grid overlay
+    // Grid
     ctx.strokeStyle = '#1a3a2a';
     ctx.lineWidth = 0.5;
-    for (var x = 0; x < W; x += 30) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
-    for (var y = 0; y < H; y += 30) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+    for (let x = 0; x < W; x += 30) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+    for (let y = 0; y < H; y += 30) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
 
-    // Check distance to turbine
-    var dist = Math.hypot(data.pos[0] - turbinePos.x, data.pos[2] - turbinePos.z);
-    var state = data.state || 'IDLE';
-    var isClose = (state === 'HOVERING' || state === 'INSPECT' || state === 'NAVIGATE') && dist < 15;
+    // Distance check
+    const t = CFG.TURBINE_POS;
+    const dist = data.pos ? Math.hypot(data.pos[0] - t[0], data.pos[2] - t[2]) : 999;
+    const isClose = (data.state === 'HOVERING' || data.state === 'INSPECT' || data.state === 'NAVIGATE') && dist < CFG.DETECTION_RANGE;
 
-    if (isClose) {
-      // Draw turbine silhouette
-      ctx.fillStyle = '#2a4a3a';
-      ctx.fillRect(120, 30, 60, 160);
-      ctx.fillStyle = '#1a2a1a';
-      ctx.fillRect(100, 20, 100, 20);
-
-      // Mock detections
-      this._mockDets = [
-        { cls: 'crack', conf: 0.82 + Math.random() * 0.08, x: 130, y: 60, w: 40, h: 20 },
-        { cls: 'corrosion', conf: 0.71 + Math.random() * 0.12, x: 160, y: 110, w: 50, h: 25 },
+    // Detections: prefer backend, fallback to mock
+    let dets = (data.detections && data.detections.length > 0) ? data.detections : null;
+    if (!dets && isClose) {
+      dets = [
+        { cls: 'crack', conf: 0.82, bbox: [120, 50, 40, 20] },
+        { cls: 'corrosion', conf: 0.71, bbox: [160, 100, 50, 25] },
       ];
-      if (dist < 8) {
-        this._mockDets.push({ cls: 'rust', conf: 0.65 + Math.random() * 0.15, x: 140, y: 150, w: 35, h: 18 });
-      }
+      if (dist < 8) dets.push({ cls: 'rust', conf: 0.65, bbox: [140, 150, 35, 18] });
+    }
 
-      // Draw detection boxes
-      for (var i = 0; i < this._mockDets.length; i++) {
-        var d = this._mockDets[i];
+    // Turbine silhouette when close
+    if (isClose) {
+      ctx.fillStyle = '#1a3a2a';
+      ctx.fillRect(120, 30, 60, 160);
+      ctx.fillStyle = '#0f1f0f';
+      ctx.fillRect(100, 20, 100, 20);
+    }
+
+    // Draw detections
+    if (dets) {
+      for (const d of dets) {
+        const b = d.bbox || [100, 80, 40, 30];
         ctx.strokeStyle = d.conf > 0.75 ? '#ff4444' : '#ffaa22';
         ctx.lineWidth = 2;
-        ctx.strokeRect(d.x, d.y, d.w, d.h);
+        ctx.strokeRect(b[0], b[1], b[2], b[3]);
         ctx.fillStyle = d.conf > 0.75 ? '#ff4444' : '#ffaa22';
         ctx.font = '10px monospace';
-        ctx.fillText(d.cls + ' ' + Math.round(d.conf * 100) + '%', d.x + 2, d.y - 2);
+        ctx.fillText((d.cls || '?') + ' ' + Math.round((d.conf || 0) * 100) + '%', b[0] + 2, b[1] - 2);
       }
-
-      // Update detection list
-      if (this._detList) {
-        this._detList.innerHTML = this._mockDets.map(function(d) {
-          return '<div class="det-item">' + d.cls + ' <span class="conf">' + Math.round(d.conf * 100) + '%</span></div>';
-        }).join('');
+      // Detection list
+      const list = $('det-list');
+      if (list) {
+        list.innerHTML = dets.map(d =>
+          '<div class="det-item">' + (d.cls || '?') + ' <span class="conf">' + Math.round((d.conf || 0) * 100) + '%</span></div>'
+        ).join('');
       }
     } else {
-      this._mockDets = [];
-      if (this._detList) this._detList.innerHTML = '<div class="det-item" style="color:#7fa8c8">No targets</div>';
-      ctx.fillStyle = '#3a6a4a';
-      ctx.font = '14px monospace';
-      ctx.fillText('SCANNING...', 95, 110);
+      const list = $('det-list');
+      if (list) list.innerHTML = '<div class="det-item" style="color:#7fa8c8">No targets</div>';
+      if (!isClose) {
+        ctx.fillStyle = '#3a6a4a';
+        ctx.font = '14px monospace';
+        ctx.fillText('SCANNING...', 95, 110);
+      }
     }
 
     // Crosshair
@@ -225,7 +232,6 @@ export class HUD {
     ctx.fillRect(0, H - 20, W, 20);
     ctx.fillStyle = '#4dd0a0';
     ctx.font = '10px monospace';
-    ctx.fillText('DIST: ' + dist.toFixed(1) + 'm | ' + state, 8, H - 6);
+    ctx.fillText('DIST: ' + dist.toFixed(1) + 'm | ' + (data.state || 'IDLE'), 8, H - 6);
   }
-
 }
