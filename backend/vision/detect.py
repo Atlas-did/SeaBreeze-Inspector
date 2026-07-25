@@ -15,6 +15,8 @@ class DefectDetector:
     """YOLO缺陷检测器 — 参数优先从 yolo_config.yaml 读取"""
 
     DEFECT_NAMES = {0: "crack", 1: "corrosion", 2: "leading_edge_damage"}
+    # Compat: old dataset used "erosion" → normalize to "corrosion"
+    _CLASS_ALIASES = {"erosion": "corrosion", "rust": "corrosion"}
     DEFECT_COLORS = {
         "crack": (0, 0, 255),  # 红色
         "corrosion": (0, 140, 255),  # 橙色

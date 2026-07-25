@@ -1,0 +1,6 @@
+path: ../data
+train: raw/train
+val: raw/val
+test: raw/test
+nc: 3
+names: ['crack', 'corrosion', 'leading_edge_damage']

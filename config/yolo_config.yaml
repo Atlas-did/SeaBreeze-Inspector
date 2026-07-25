@@ -9,7 +9,7 @@ model:
   # YOLOv8预训练权重文件路径（相对项目根目录）
   # 训练前使用 "yolov8n.pt"（Nano版，速度最快，适合笔记本CPU推理）
   # 训练后替换为 "data/weights/best.pt"（自己训练的模型）
-  weights_path: "data/weights/yolov8n.pt"
+  weights_path: "data/weights/seabreeze_best.pt"  # mAP50=0.40, 需扩充数据集重新训练达0.70
 
   # 配置文件路径（YOLO数据集配置，包含训练/验证集路径和类别定义）
   # 训练前需根据实际数据集修改此文件
