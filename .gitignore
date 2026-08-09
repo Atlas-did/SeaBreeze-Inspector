@@ -34,6 +34,8 @@ Thumbs.db
 data/processed/logs/*.csv
 data/processed/*.png
 data/weights/*.pt
+!data/weights/.gitkeep
+!data/weights/.ci-placeholder.pt
 
 # Environment
 .env
@@ -48,8 +50,9 @@ htmlcov/
 # Jupyter
 .ipynb_checkpoints/
 
-# Flight logs
-logs/
+# Flight logs (keep .gitkeep for CI directory check)
+logs/*
+!logs/.gitkeep
 
 # Internal docs (keep only public-facing README/LICENSE/CONTRIBUTING)
 docs/*.md
