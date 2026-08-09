@@ -163,14 +163,21 @@ class ConfigLoader:
         config_path = cls._find_config_file(name, config_dir)
         raw_data = cls._parse_yaml(config_path)
 
+        env_overrides_applied = []
         if apply_env_override:
-            raw_data = cls._apply_env_overrides(name, raw_data)
+            raw_data, env_overrides_applied = cls._apply_env_overrides(name, raw_data)
 
         cls._validate_types(raw_data, config_path)
 
         config = Config(raw_data)
         if use_cache:
             cls._cache[cache_key] = config
+
+        # 记录配置来源 (便于诊断配置问题)
+        source_info = "file: {}".format(config_path)
+        if env_overrides_applied:
+            source_info += " (ENV override: {})".format(", ".join(env_overrides_applied))
+        print("[CONFIG] {} 已加载 — {}".format(name, source_info))
 
         return config
 
@@ -228,8 +235,9 @@ class ConfigLoader:
     @classmethod
     def _apply_env_overrides(
         cls, name: str, data: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    ) -> tuple:
         config_prefix = f"{cls.ENV_PREFIX}_{name.upper()}__"
+        overridden = []
 
         for env_key, env_value in os.environ.items():
             if not env_key.startswith(config_prefix):
@@ -238,8 +246,9 @@ class ConfigLoader:
             path_str = env_key[len(config_prefix):]
             path_parts = [p.lower() for p in path_str.split(cls.ENV_NESTED_SEP)]
             cls._set_nested_value(data, path_parts, env_value, env_key)
+            overridden.append(path_str)
 
-        return data
+        return data, overridden
 
     @classmethod
     def _set_nested_value(

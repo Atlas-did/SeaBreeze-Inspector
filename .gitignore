@@ -65,3 +65,8 @@ docs/*.md
 !docs/TESTING.md
 HANDOFF.md
 
+data/raw/
+runs/detect/
+seabreeze-3d-sim/train_v3.py
+scripts/watch_training.py
+*.zip

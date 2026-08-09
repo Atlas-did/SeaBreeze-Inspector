@@ -78,8 +78,8 @@ class FlightRecorder:
         try:
             self._f.write(row)
             self._f.flush()
-        except Exception:
-            pass
+        except (IOError, OSError, ValueError):
+            logger.warning("FlightRecorder write failed", exc_info=True)
 
     def close(self):
         """N6 修复: 显式关闭文件, 注册到 atexit."""
@@ -87,8 +87,8 @@ class FlightRecorder:
             try:
                 self._f.flush()
                 self._f.close()
-            except Exception:
-                pass
+            except (IOError, OSError):
+                pass  # 关闭时文件可能已被 OS 回收, 忽略
             self._f = None
 
 
@@ -145,8 +145,8 @@ class BridgeHandler(http.server.SimpleHTTPRequestHandler):
                         a1 = float(params.get("a1", [90])[0])
                         a2 = float(params.get("a2", [45])[0])
                         self.ctx.arm.set_angles([a0, a1, a2])
-                    except Exception:
-                        pass
+                    except (ValueError, TypeError, AttributeError):
+                        logger.warning("Invalid arm angles in request", exc_info=True)
                     self._json(200, {"ok": True})
                     return
                 if key:

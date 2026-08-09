@@ -1,6 +1,10 @@
 path: ../data
-train: raw/train
-val: raw/val
-test: raw/test
+train: raw/train/images
+val: raw/val/images
+test: raw/val/images
+
 nc: 3
-names: ['crack', 'corrosion', 'leading_edge_damage']
+names:
+  0: crack
+  1: corrosion
+  2: leading_edge_damage

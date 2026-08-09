@@ -50,9 +50,17 @@ class MissionController:
         # =====================================================================
         try:
             self.cfg = ConfigLoader.load("drone_config", config_dir=config_dir)
-            print("[MAIN] 已加载 drone_config.yaml")
         except Exception as e:
-            print("[MAIN] 配置加载失败, 使用默认值: {}".format(e))
+            # 硬件模式: 配置缺失必须 fail-fast, 不能用默认值飞行
+            if mode == "hardware":
+                raise RuntimeError(
+                    "[MAIN] FATAL: 硬件模式下配置加载失败, 拒绝用默认值飞行。"
+                    "请确认 config/drone_config.yaml 存在且格式正确。"
+                    "\n原始错误: {}".format(e)
+                ) from e
+            # 仿真/开发模式: 允许回退到默认值
+            import logging
+            logging.warning("[MAIN] 配置加载失败, 使用硬编码默认值: %s", e)
             self.cfg = None
 
         # 从配置读取参数, 配置缺失时回退到硬编码默认值
@@ -541,15 +549,12 @@ class MissionController:
         # 日志
         self._log_frame(disturbance, detections if detections else [])
 
-        # 消息总线
+        # 消息总线 (pub-sub: publish 到独立 topic)
         try:
-            self.bus.put(Message(
-                topic=TOPIC_MISSION_STATUS,
-                data=self.get_state_dict(),
-                source="main",
-            ), block=False)
+            self.bus.publish(TOPIC_MISSION_STATUS, self.get_state_dict(), source="main")
         except Exception:
-            pass
+            import logging
+            logging.warning("[MAIN] 消息总线发布失败", exc_info=True)
 
         return control_output, self.get_state_dict()
 
@@ -645,7 +650,9 @@ class MissionController:
                 extra={"state": self.state, "battery": self._battery},
             )
         except Exception:
-            pass  # 日志错误不影响飞行
+            # 日志错误不应中断飞行, 但需记录以便排查
+            import logging
+            logging.warning("[MAIN] FlightLogger.log_frame 失败", exc_info=True)
 
     def update_video_frame(self, frame: np.ndarray):
         """外部注入视频帧 (供视频线程调用)"""

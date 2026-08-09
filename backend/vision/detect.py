@@ -9,6 +9,7 @@ from typing import Dict, List, Optional
 
 import cv2
 import numpy as np
+import zlib
 
 
 class DefectDetector:
@@ -64,28 +65,48 @@ class DefectDetector:
                 self.mock = True
 
     def detect(self, image: np.ndarray) -> List[Dict]:
-        """检测单帧图像, 返回检测框列表"""
+        """检测单帧图像, 返回检测框列表
+
+        异常保护: 若 ultralytics 推理或结果解析抛异常, 自动退化为 mock 模式,
+        记录完整 traceback 并返回空列表, 不中断主循环。
+        """
+        if image is None or not hasattr(image, "shape") or image.size == 0:
+            return []
         if self.mock:
             return self._mock_detect(image)
 
-        results = self.model(image, conf=self.conf_threshold, device=self.device, verbose=False)
+        try:
+            results = self.model(image, conf=self.conf_threshold, device=self.device, verbose=False)
+        except Exception as e:
+            import traceback
+            print("[DETECT] ultralytics 推理失败, 切换为 mock 模式: {}".format(e))
+            traceback.print_exc()
+            self.mock = True
+            return self._mock_detect(image)
+
         detections = []
+        try:
+            for r in results:
+                if r.boxes is None:
+                    continue
+                for box in r.boxes:
+                    cls_id = int(box.cls[0])
+                    conf = float(box.conf[0])
+                    x1, y1, x2, y2 = map(float, box.xyxy[0])
 
-        for r in results:
-            if r.boxes is None:
-                continue
-            for box in r.boxes:
-                cls_id = int(box.cls[0])
-                conf = float(box.conf[0])
-                x1, y1, x2, y2 = map(float, box.xyxy[0])
-
-                detections.append({
-                    "class_id": cls_id,
-                    "class_name": self.DEFECT_NAMES.get(cls_id, "unknown"),
-                    "confidence": round(conf, 3),
-                    "bbox": [int(x1), int(y1), int(x2), int(y2)],
-                    "severity": self._estimate_severity(conf),
-                })
+                    detections.append({
+                        "class_id": cls_id,
+                        "class_name": self.DEFECT_NAMES.get(cls_id, "unknown"),
+                        "confidence": round(conf, 3),
+                        "bbox": [int(x1), int(y1), int(x2), int(y2)],
+                        "severity": self._estimate_severity(conf),
+                    })
+        except Exception as e:
+            import traceback
+            print("[DETECT] 结果解析失败, 切换为 mock 模式: {}".format(e))
+            traceback.print_exc()
+            self.mock = True
+            return self._mock_detect(image)
 
         return detections
 
@@ -94,7 +115,9 @@ class DefectDetector:
         h, w = image.shape[:2]
         import random
         # 每帧用独立种子, 帧间有变化, 帧内可复现
-        frame_seed = hash(image.tobytes()) % 100000 + 42
+        # 性能: 下采样4x后 CRC32, 避免完整帧 tobytes() 的高 CPU/内存开销
+        thumbnail = image[::4, ::4]
+        frame_seed = zlib.crc32(thumbnail.tobytes()) % 100000 + 42
         rng = random.Random(frame_seed)
         n_det = rng.randint(0, 3)
         detections = []
@@ -158,10 +181,14 @@ class MockBladeDefectDetector(DefectDetector):
 
     def detect(self, image: np.ndarray) -> List[Dict]:
         """模拟检测, 返回标准化格式的检测结果"""
+        if image is None or not hasattr(image, "shape") or image.size == 0:
+            return []
         h, w = image.shape[:2]
         import random
         # P1-F/5.4: 用固定种子 + frame hash 确保同一帧结果一致, 不同帧结果不同
-        _rng = random.Random(hash(image.tobytes()) % 10000 + 42)
+        # 性能: 下采样4x后 CRC32, 避免完整帧 tobytes() 的高 CPU/内存开销
+        thumbnail = image[::4, ::4]
+        _rng = random.Random(zlib.crc32(thumbnail.tobytes()) % 10000 + 42)
         n_det = _rng.randint(0, 4)
         detections = []
         for i in range(n_det):

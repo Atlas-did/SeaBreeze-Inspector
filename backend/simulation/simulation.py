@@ -47,7 +47,7 @@ from backend.utils.units import (m_to_cm, cm_to_m, mps_to_cmps, cmps_to_mps,
 
                                   mps2_to_cmps2)
 
-from backend.utils.config import ConfigLoader
+from backend.utils.config import ConfigLoader, ConfigError
 
 
 
@@ -75,7 +75,14 @@ class Simulation:
 
 
 
-    def __init__(self, width=1200, height=700, fps=30):
+    def __init__(self, width=1200, height=700, fps=30, headless=False):
+
+        self.headless = headless
+
+        if self.headless:
+            # Headless/CI 模式: 不创建窗口, 使用 dummy video driver
+            os.environ["SDL_VIDEODRIVER"] = "dummy"
+            print("[SIM] Headless 模式已启用 — SDL_VIDEODRIVER=dummy")
 
         pygame.init()
 
@@ -89,9 +96,12 @@ class Simulation:
 
 
 
-        self.screen = pygame.display.set_mode((width, height))
-
-        pygame.display.set_caption("SeaBreeze Inspector — UAV Simulation")
+        if self.headless:
+            # 创建 off-screen surface 而非实际窗口 (避免 CI/headless 崩溃)
+            self.screen = pygame.Surface((width, height))
+        else:
+            self.screen = pygame.display.set_mode((width, height))
+            pygame.display.set_caption("SeaBreeze Inspector — UAV Simulation")
 
         self.clock = pygame.time.Clock()
 
@@ -139,7 +149,7 @@ class Simulation:
 
             n = sim_cfg["imu_noise"]
 
-        except Exception:
+        except (ConfigError, KeyError, AttributeError):
 
             # 配置缺失时回退硬编码默认值
 
@@ -271,7 +281,72 @@ class Simulation:
 
     # =========================================================================
 
+    def step(self, dt=None):
+        """执行一帧仿真更新。可被 headless smoke test / 单步调试复用。"""
+        if dt is None:
+            dt = min(self.clock.tick(self.fps) / 1000.0, 0.05)
 
+        self._frame_count += 1
+        self._sim_time += dt
+
+        self.renderer.tick(dt)
+        self._blade_angle += dt * 1.5  # 叶片旋转
+
+        # 1. 事件
+        self._handle_events()
+
+        # 2. 键盘 → 目标位置
+        self._update_target_from_keys()
+
+        # 3. 物理步进: 速度指令经"加速度限制"一阶跟踪 + 风扰, 不再瞬移
+        vel = self.quad.get_velocity()
+        v_cmd = self._last_control  # 上一帧 MissionController 的速度指令 (m/s)
+
+        # 加速度限制: 速度不能瞬时跳变, 模拟推力饱和 → 有惯性手感
+        dv = v_cmd - vel
+        a_max = 3.0  # m/s²
+        dv_norm = np.linalg.norm(dv)
+
+        if dv_norm > a_max * dt:
+            dv *= (a_max * dt) / dv_norm
+
+        vel_new = vel + dv
+
+        # 风扰动: 飞行中风力转化为缓慢漂移 (F/m·dt)
+        if self.mc.state not in ("IDLE",):
+            vel_new = vel_new + (self.wind.sample(dt) / self.quad.mass) * dt * 0.3
+
+        self.quad.set_velocity(vel_new)
+        self.quad.state[0:3] += vel_new * dt  # p += v*dt
+        self.quad.state[2] = max(0, self.quad.state[2])
+
+        # 姿态可视化: 由速度反推倾角 (前飞低头, 侧飞压坡)
+        self.quad.state[6] = float(np.clip(-vel_new[1] * 0.12, -0.4, 0.4))  # roll
+        self.quad.state[7] = float(np.clip(vel_new[0] * 0.12, -0.4, 0.4))   # pitch
+
+        # 4. 传感器 + 委托MissionController运行完整流水线 (EKF/安全检查/状态机/控制器)
+        sensor_data = self.sensor.read_all(self.quad)
+        imu = sensor_data["imu"]
+        opt = sensor_data["optical"]
+        bar = sensor_data["barometer"]
+        z = np.array([imu[0], imu[1], imu[2], opt[0], opt[1], bar])
+        pos = self.quad.get_position()
+        att = self.quad.get_attitude()
+        ctrl_cmps, state_dict = self.mc.update_with_external_data(
+            z, m_to_cm(pos), mps_to_cmps(vel_new), att)
+        self._last_control = cmps_to_mps(ctrl_cmps)
+
+        # 5. 电池消耗 (#7: 所有飞行状态都耗电, 不只是 HOVERING)
+        if self.mc.state not in ("IDLE", "EMERGENCY"):
+            self.mc.set_battery(self.mc.get_battery() - dt * self._battery_hover_drain)
+        else:
+            self.mc.set_battery(self.mc.get_battery() - dt * self._battery_idle_drain)
+
+        # 7. 渲染 (headless 模式跳过, 仅运行物理/控制)
+        if not self.headless:
+            self._render()
+
+        return dt
 
     def run(self):
 
@@ -281,105 +356,9 @@ class Simulation:
 
         print("  左面板=遥测数据  中=3D场景  右=摄像机画面")
 
-
-
         while self.running:
-
             dt = min(self.clock.tick(self.fps) / 1000.0, 0.05)  # 限最大dt
-
-            self._frame_count += 1
-
-            self._sim_time += dt
-
-            self.renderer.tick(dt)
-
-            self._blade_angle += dt * 1.5  # 叶片旋转
-
-
-
-            # 1. 事件
-
-            self._handle_events()
-
-            # 2. 键盘 → 目标位置
-
-            self._update_target_from_keys()
-
-            # 3. 物理步进: 速度指令经"加速度限制"一阶跟踪 + 风扰, 不再瞬移
-
-            vel = self.quad.get_velocity()
-
-            v_cmd = self._last_control  # 上一帧 MissionController 的速度指令 (m/s)
-
-            # 加速度限制: 速度不能瞬时跳变, 模拟推力饱和 → 有惯性手感
-
-            dv = v_cmd - vel
-
-            a_max = 3.0  # m/s²
-
-            dv_norm = np.linalg.norm(dv)
-
-            if dv_norm > a_max * dt:
-
-                dv *= (a_max * dt) / dv_norm
-
-            vel_new = vel + dv
-
-            # 风扰动: 飞行中风力转化为缓慢漂移 (F/m·dt)
-
-            if self.mc.state not in ("IDLE",):
-
-                vel_new = vel_new + (self.wind.sample(dt) / self.quad.mass) * dt * 0.3
-
-            self.quad.set_velocity(vel_new)
-
-            self.quad.state[0:3] += vel_new * dt  # p += v*dt
-
-            self.quad.state[2] = max(0, self.quad.state[2])
-
-            # 姿态可视化: 由速度反推倾角 (前飞低头, 侧飞压坡)
-
-            self.quad.state[6] = float(np.clip(-vel_new[1] * 0.12, -0.4, 0.4))  # roll
-
-            self.quad.state[7] = float(np.clip(vel_new[0] * 0.12, -0.4, 0.4))   # pitch
-
-            # 4. 传感器 + 委托MissionController运行完整流水线 (EKF/安全检查/状态机/控制器)
-
-            sensor_data = self.sensor.read_all(self.quad)
-
-            imu = sensor_data["imu"]
-
-            opt = sensor_data["optical"]
-
-            bar = sensor_data["barometer"]
-
-            z = np.array([imu[0], imu[1], imu[2], opt[0], opt[1], bar])
-
-            pos = self.quad.get_position()
-
-            att = self.quad.get_attitude()
-
-            ctrl_cmps, state_dict = self.mc.update_with_external_data(
-
-                z, m_to_cm(pos), mps_to_cmps(vel_new), att)
-
-            self._last_control = cmps_to_mps(ctrl_cmps)
-
-            # 5. 电池消耗 (#7: 所有飞行状态都耗电, 不只是 HOVERING)
-
-            if self.mc.state not in ("IDLE", "EMERGENCY"):
-
-                self.mc.set_battery(self.mc.get_battery() - dt * self._battery_hover_drain)
-
-            else:
-
-                self.mc.set_battery(self.mc.get_battery() - dt * self._battery_idle_drain)
-
-            # 7. 渲染
-
-            self._render()
-
-
+            self.step(dt)
 
         pygame.quit()
 
@@ -833,7 +812,13 @@ class Simulation:
 
 if __name__ == "__main__":
 
-    sim = Simulation()
+    import argparse
+    parser = argparse.ArgumentParser(description="SeaBreeze Inspector — UAV Simulation")
+    parser.add_argument("--headless", action="store_true",
+                        help="Headless mode (no GUI, for CI/testing)")
+    args = parser.parse_args()
+
+    sim = Simulation(headless=args.headless)
 
     try:
 
