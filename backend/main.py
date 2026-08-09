@@ -238,12 +238,10 @@ class MissionController:
         # =====================================================================
         # 5. 安全检查 (P0-1: SafetyGuard集成)
         # =====================================================================
-        if self._check_safety():
-            self._log_frame(disturbance, [])  # 紧急状态也记录
-            return  # 已触发紧急状态, 跳过正常控制
+        safety_triggered = self._check_safety()
 
         # =====================================================================
-        # 6. 状态机处理 (P0-2: 完整6+1状态)
+        # 6. 状态机处理 — EMERGENCY 时也必须运行 (执行紧急降落逻辑)
         # =====================================================================
         detections = self._handle_state_machine(disturbance)
 
@@ -537,9 +535,8 @@ class MissionController:
         self.current_vel = ekf_state["velocity"]
         disturbance = ekf_state["disturbance"]
 
-        # 安全检查
-        if self._check_safety():
-            return np.zeros(3), self.get_state_dict()
+        # 安全检查 — 记录但不跳过状态机 (EMERGENCY 降落逻辑在状态机内)
+        self._check_safety()
 
         # 状态机 (P0-B: compute 已在 _handle_state_machine 中调用一次, 此处复用)
         detections, control_output = self._handle_state_machine(disturbance)
@@ -741,8 +738,8 @@ def main():
     parser.add_argument(
         "--mock",
         action="store_true",
-        default=True,
-        help="使用Mock模式(无真实硬件)",
+        default=False,
+        help="Mock mode (no real hardware)",
     )
     args = parser.parse_args()
 

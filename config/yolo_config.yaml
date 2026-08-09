@@ -16,8 +16,9 @@ model:
   data_yaml_path: "data/processed/wind_turbine_defect.yaml"
 
   # 输入图像尺寸（必须为32的倍数：320, 416, 640, 1280）
-  # 越大精度越高但推理越慢，笔记本CPU推荐640
-  input_size: 640
+  # V3模型训练时使用1280，推理必须与训练一致
+  # 笔记本CPU推理较慢，如有GPU可保持1280
+  input_size: 1280
 
   # 设备选择：cpu | cuda | mps
   # cpu: 通用，适合笔记本
