@@ -75,17 +75,20 @@ jobs:
         if: runner.os == 'Linux'
         env:
           SDL_VIDEODRIVER: dummy
+          PYTHONIOENCODING: utf-8
         run: xvfb-run -a python -m pytest tests/ -v --tb=short
 
       - name: Run tests (Windows headless)
         if: runner.os == 'Windows'
         env:
           SDL_VIDEODRIVER: dummy
+          PYTHONIOENCODING: utf-8
         run: python -m pytest tests/ -v --tb=short
 
       - name: Sim headless smoke test
         env:
           SDL_VIDEODRIVER: dummy
+          PYTHONIOENCODING: utf-8
         run: python scripts/smoke_test_sim.py --frames 10
 
       - name: Test summary

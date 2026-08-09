@@ -1,15 +1,15 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""CI smoke test: 验证 simulation headless 模式可初始化并运行 N 帧不崩溃。
+"""CI smoke test: verify simulation headless mode init and run N frames without crash.
 
-用法:
+Usage:
   SDL_VIDEODRIVER=dummy python scripts/smoke_test_sim.py [--frames 30]
 """
 
 import os
 import sys
 
-# 必须在导入 pygame 之前设置
+# Must set before importing pygame
 os.environ["SDL_VIDEODRIVER"] = "dummy"
 
 _PROJ_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -25,26 +25,26 @@ def main():
 
     from backend.simulation.simulation import Simulation
 
-    print("[SMOKE] 初始化 Simulation (headless)...")
+    print("[SMOKE] Initializing Simulation (headless)...")
     sim = Simulation(headless=True)
-    print("[SMOKE] Simulation headless init 成功")
+    print("[SMOKE] Simulation headless init OK")
 
-    print(f"[SMOKE] 运行 {frames} 帧...")
+    print("[SMOKE] Running {} frames...".format(frames))
     sim.quad.set_velocity(sim.quad.get_velocity() * 0)
     for i in range(frames):
         try:
             sim.step(dt=1 / 30.0)
         except Exception as e:
-            print(f"[SMOKE] 第 {i} 帧异常: {e}")
+            print("[SMOKE] Frame {} error: {}".format(i, e))
             import traceback
             traceback.print_exc()
             sys.exit(1)
 
-    print(f"[SMOKE] {frames} 帧运行成功, 无崩溃")
+    print("[SMOKE] {} frames OK, no crash".format(frames))
     sim.running = False
     import pygame
     pygame.quit()
-    print("[SMOKE] Simulation headless smoke test 通过")
+    print("[SMOKE] Simulation headless smoke test PASSED")
     return 0
 
 
