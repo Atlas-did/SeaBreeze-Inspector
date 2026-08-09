@@ -65,7 +65,12 @@ jobs:
           pip install -r requirements-dev.txt 2>/dev/null || true
 
       - name: Run dependency check
-        run: python scripts/check_deps.py --ci
+        env:
+          SDL_VIDEODRIVER: dummy
+        run: |
+          mkdir -p logs data/weights
+          touch data/weights/.ci-placeholder.pt
+          python scripts/check_deps.py --ci
 
       - name: Run tests (Ubuntu with xvfb)
         if: runner.os == 'Linux'
