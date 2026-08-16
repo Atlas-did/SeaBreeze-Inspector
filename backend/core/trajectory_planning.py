@@ -155,7 +155,7 @@ class RRTStarPlanner:
 
         # 回溯路径
         path = self._backtrack(goal_idx)
-        return self._smooth_path(path)
+        return self._smooth_path(path, is_collision)
 
     def _random_sample(self) -> np.ndarray:
         return np.random.uniform(self.bounds_min, self.bounds_max)
@@ -246,13 +246,15 @@ class RRTStarPlanner:
             idx = self.parents[idx]
         return np.array(path[::-1])
 
-    def _smooth_path(self, path: np.ndarray) -> np.ndarray:
+    def _smooth_path(self, path: np.ndarray, is_collision: Callable) -> np.ndarray:
         if len(path) < 3:
             return path
-        # 简单平滑: 取中点
+        # 简单平滑: 取中点。平滑不得引入碰撞 — 若平滑点越界, 保留原始点(已知无碰撞)
         smoothed = [path[0]]
         for i in range(1, len(path) - 1):
             pt = 0.25 * path[i-1] + 0.5 * path[i] + 0.25 * path[i+1]
+            if is_collision(pt):
+                pt = path[i]
             smoothed.append(pt)
         smoothed.append(path[-1])
         return np.array(smoothed)
