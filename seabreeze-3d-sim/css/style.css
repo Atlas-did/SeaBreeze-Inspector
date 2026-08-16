@@ -119,3 +119,18 @@ body.emergency #t-state { color: #ff5555; animation: blink 0.5s infinite alterna
 .v.err { color: #ff4444 !important; }
 
 #offline-badge { animation: blink 0.8s infinite alternate; }
+
+/* ===== 补丁 (Kimi K3 前端评审) ===== */
+#camera-panel { right: 14px; top: 14px; width: 320px; }
+#cam-canvas { width: 100%; height: auto; display: block; border-radius: 4px; background: #000; }
+#det-list { max-height: 90px; overflow-y: auto; }
+.det-item { display: flex; justify-content: space-between; padding: 1px 4px; font-size: 12px;
+  border-bottom: 1px dashed rgba(100,200,255,0.15); }
+.det-item .conf { color: #ffb347; }
+.slider-row input[type=range]::-moz-range-thumb {
+  width: 16px; height: 16px; border-radius: 50%;
+  background: #64c8ff; border: 2px solid #d0e8ff; cursor: pointer;
+}
+#title-badge { top: 30px; }              /* 给 offline-badge 让位 */
+.panel { -webkit-backdrop-filter: blur(4px); }
+@media (max-height: 760px) { #det-log { display: none; } }  /* 矮屏防右栏重叠 */

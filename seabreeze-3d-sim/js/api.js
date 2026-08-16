@@ -1,4 +1,4 @@
-﻿// SeaBreeze Inspector - Backend API Client
+// SeaBreeze Inspector - Backend API Client
 // State polling with retry + offline detection
 // =============================================================================
 import { CFG } from './config.js';
@@ -17,7 +17,7 @@ class BackendClient {
     try {
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 2000);
-      const res = await fetch(CFG.API_STATE, { signal: ctrl.signal });
+      const res = await fetch(CFG.API_STATE, { signal: ctrl.signal, cache: 'no-store' });
       clearTimeout(timer);
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json();

@@ -1,4 +1,4 @@
-﻿// SeaBreeze Inspector - HUD (telemetry + camera + arm panel)
+// SeaBreeze Inspector - HUD (telemetry + camera + arm panel)
 // Single update(data) entry point, camera redraws at 10Hz
 // =============================================================================
 import { CFG } from './config.js';
@@ -13,6 +13,7 @@ export class HUD {
     this._camCtx = null;
     this._mockDets = [];
     this._prevArm = [90, 90, 45];
+    this._dragging = -1;
     this._initSliders();
     this._initBadge();
     this._initCamera();
@@ -34,7 +35,11 @@ export class HUD {
   _initCamera() {
     const canvas = $('cam-canvas');
     if (!canvas) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = 300 * dpr;
+    canvas.height = 220 * dpr;
     this._camCtx = canvas.getContext('2d');
+    this._camCtx.scale(dpr, dpr);
     this._camCtx.fillStyle = '#0a0a0a';
     this._camCtx.fillRect(0, 0, 300, 220);
   }
@@ -44,6 +49,7 @@ export class HUD {
     for (let i = 0; i < 3; i++) {
       const el = $('j' + i);
       if (!el) continue;
+      el.addEventListener('pointerdown', () => { this._dragging = i; });
       el.addEventListener('input', () => {
         const a0 = parseFloat($('j0').value);
         const a1 = parseFloat($('j1').value);
@@ -58,6 +64,7 @@ export class HUD {
         backend.sendArm([a0, a1, a2], true); // force flush on release
       });
     }
+    window.addEventListener('pointerup', () => { this._dragging = -1; });
     // Presets
     document.querySelectorAll('#arm-panel .btn-row button').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -65,6 +72,7 @@ export class HUD {
         $('j0').value = p[0]; $('j1').value = p[1]; $('j2').value = p[2];
         for (let i = 0; i < 3; i++) this._label(i);
         backend.sendArm(p, true);
+        btn.blur();   // 防 Space 误触发聚焦按钮
       });
     });
   }
@@ -78,11 +86,8 @@ export class HUD {
   _syncSliders(angles) {
     for (let i = 0; i < 3; i++) {
       const slider = $('j' + i);
-      if (!slider) continue;
-      if (document.activeElement !== slider) {
-        slider.value = angles[i];
-        this._label(i);
-      }
+      if (!slider || this._dragging === i) continue;
+      if (this._prevArm[i] !== angles[i]) { slider.value = angles[i]; this._label(i); }
     }
     this._prevArm = [...angles];
   }
@@ -110,32 +115,34 @@ export class HUD {
       this._badge.style.display = 'block';
     }
 
-    // FPS (from backend)
+    // FPS (真实渲染帧率, 非后端回传值)
     this._fpsAcc += dt; this._fpsN++;
     if (this._fpsAcc >= 0.5) {
       const el = $('t-fps');
-      if (el) el.textContent = data.fps || 0;
+      if (el) el.textContent = Math.round(this._fpsN / this._fpsAcc);
       this._fpsAcc = 0; this._fpsN = 0;
     }
 
     // Core telemetry
     const set = (id, val) => { const e = $(id); if (e) e.textContent = val; };
     set('t-state', data.state || 'IDLE');
-    set('t-batt', Math.round(data.battery || 100) + '%');
+    document.body.classList.toggle('emergency', data.state === 'EMERGENCY');  // 激活急停红闪
+    const batt = data.battery ?? 100;
+    set('t-batt', Math.round(batt) + '%');
     const bar = $('t-batt-bar');
-    if (bar) { bar.style.width = (data.battery || 100) + '%'; bar.classList.toggle('low', (data.battery || 100) < 20); }
+    if (bar) { bar.style.width = batt + '%'; bar.classList.toggle('low', batt < CFG.BATTERY_LOW); }
 
     const f3 = (v) => v ? '[' + v[0].toFixed(1) + ', ' + v[1].toFixed(1) + ', ' + v[2].toFixed(1) + ']' : '[0,0,0]';
     set('t-pos', f3(data.pos));
     set('t-vel', f3(data.vel));
-    set('t-wind', '[' + ((data.wind ? data.wind[0] : 0).toFixed(2)) + ', ' + ((data.wind ? data.wind[2] : 0).toFixed(2)) + ']');
+    set('t-wind', '[' + ((data.wind ? data.wind[0] : 0).toFixed(2)) + ', ' + ((data.wind ? data.wind[1] : 0).toFixed(2)) + ']');
 
     if (data.pos) {
       const t = CFG.TURBINE_POS;
       // z-up: 水平距离用 x-y 平面, 不混入高度 z
       set('t-dist', Math.hypot(data.pos[0] - t[0], data.pos[1] - t[1]).toFixed(1) + ' m');
     }
-    set('t-target', (data.state === 'HOVERING' || data.state === 'NAVIGATE') ? f3(data.pos) : '--');
+    set('t-target', (data.state === 'HOVERING' || data.state === 'NAVIGATE') ? (data.target ? f3(data.target) : '--') : '--');
 
     // EKF
     const mahal = data.ekf_mahal || 0;

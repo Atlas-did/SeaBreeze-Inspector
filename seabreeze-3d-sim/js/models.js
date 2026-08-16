@@ -2,7 +2,7 @@
 // SeaBreeze Inspector — 3D 模型构建模块
 // 尺寸权威来源: Ryze 官方规格 (Tello 98×92.5×41mm, 桨径76mm)
 //              config/arm_config.yaml (臂 L1/L2/L3 = 55/45/35mm, 基座高25mm)
-// 场景比例: ×10 (毫米→厘米级显示), 即 SCALE = 0.01 m/mm × 10
+// 场景比例: ×30 (毫米→场景单位, 放大 3 倍便于观察, 非真实比例) — 与下方 SCALE 一致
 // =============================================================================
 import * as THREE from 'three';
 
@@ -80,7 +80,7 @@ export function buildDrone() {
     const guard = new THREE.Mesh(new THREE.TorusGeometry(45 * MM, 4 * MM, 8, 24, Math.PI), MAT.darkGray);
     guard.position.set(mx * MM, 20 * MM, mz * MM);
     guard.rotation.x = Math.PI / 2;
-    guard.rotation.z = Math.atan2(-mz, -mx);
+    guard.rotation.z = Math.atan2(-mx, mz);   // 半环开口朝机心
     g.add(guard);
   }
 
@@ -153,7 +153,7 @@ export function buildArm() {
   function setAngles(t1, t2, t3) {
     root.rotation.y = THREE.MathUtils.degToRad(t1 - 90);   // 90° = 正前方
     shoulder.rotation.x = THREE.MathUtils.degToRad(90 - t2);
-    elbow.rotation.x = THREE.MathUtils.degToRad(-t3 + 45);
+    elbow.rotation.x = THREE.MathUtils.degToRad(-t3);      // θ3=0 伸直,与后端 arm_endpoint 约定一致
   }
   setAngles(90, 90, 45);
 

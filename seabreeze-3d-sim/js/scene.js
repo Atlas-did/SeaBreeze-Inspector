@@ -1,4 +1,4 @@
-﻿// SeaBreeze Inspector - 3D Scene (render-only, no physics)
+// SeaBreeze Inspector - 3D Scene (render-only, no physics)
 // =============================================================================
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -28,7 +28,9 @@ export class SimScene {
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.08;
-    this.controls.maxPolarAngle = Math.PI * 0.52;
+    this.controls.maxPolarAngle = Math.PI * 0.49;   // 禁止钻到海面下
+    this.controls.minDistance = 2;
+    this.controls.maxDistance = 80;
     this.controls.target.set(...CFG.LOOKAT_INITIAL);
 
     // Entities
@@ -97,8 +99,8 @@ export class SimScene {
     this.drone.group.rotation.z = THREE.MathUtils.lerp(this.drone.group.rotation.z, -vel[0] * tilt, 0.1);
     this.drone.group.rotation.x = THREE.MathUtils.lerp(this.drone.group.rotation.x, -vel[1] * tilt, 0.1);
 
-    // Propellers
-    const flying = data.state !== 'IDLE' && data.state !== 'LAND';
+    // Propellers: LAND 仍在下降(电机工作), EMERGENCY 断动力自由落体(停转)
+    const flying = ['TAKEOFF', 'HOVERING', 'NAVIGATE', 'INSPECT', 'RETURN', 'LAND'].includes(data.state);
     this.propSpin = THREE.MathUtils.lerp(this.propSpin, flying ? 60 : 0, 0.05);
     for (const p of this.drone.props) p.rotation.y += this.propSpin * dt;
 
@@ -107,8 +109,8 @@ export class SimScene {
       this.drone.arm.setAngles(data.arm_angles[0], data.arm_angles[1], data.arm_angles[2]);
     }
 
-    // Turbine blades
-    this.turbine.rotor.rotation.x += (0.4 + Math.hypot(wind[0] || 0, wind[2] || 0) * 0.8) * dt;
+    // Turbine blades: 水平风驱动 (z-up 下 wind[0]=东, wind[1]=北, wind[2]=竖直)
+    this.turbine.rotor.rotation.x += (0.4 + Math.hypot(wind[0] || 0, wind[1] || 0) * 0.8) * dt;
 
     // Wind particles (wind 为后端 z-up: three.z = -wind.y)
     const wp = this.windPts.geometry.attributes.position;
@@ -116,6 +118,7 @@ export class SimScene {
       wp.array[i * 3] += (0.5 + (wind[0] || 0) * 3) * dt;
       wp.array[i * 3 + 2] += -(wind[1] || 0) * 3 * dt;
       if (wp.array[i * 3] > 20) wp.array[i * 3] = -20;
+      if (wp.array[i * 3] < -20) wp.array[i * 3] = 20;   // 强逆风时从 -x 侧回绕,防粒子流失
       if (wp.array[i * 3 + 2] > 20) wp.array[i * 3 + 2] = -20;
       if (wp.array[i * 3 + 2] < -20) wp.array[i * 3 + 2] = 20;
     }
@@ -151,6 +154,10 @@ export class SimScene {
         this._drawMissionPath(pos);
       } else if (data.state === 'RETURN') {
         this._drawReturnPath(pos);
+      } else if (data.state === 'IDLE' || data.state === 'LAND' || data.state === 'EMERGENCY') {
+        // 任务结束/中止时清除航线与巡检标记,防残留
+        this.pathLine.geometry.setFromPoints([]);
+        this.inspectMarker.visible = false;
       }
       this._prevState = data.state;
     }
@@ -179,6 +186,7 @@ export class SimScene {
 
   toggleChase() {
     this.chaseCam = !this.chaseCam;
+    this.controls.enableDamping = !this.chaseCam;   // chase 期间关阻尼, 防与 lerp 拉扯
     if (!this.chaseCam) {
       this.controls.target.set(...CFG.LOOKAT_INITIAL);
       this.camera.position.set(...CFG.CAMERA_INITIAL);

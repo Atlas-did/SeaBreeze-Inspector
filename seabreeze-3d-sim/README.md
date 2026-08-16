@@ -36,19 +36,22 @@ seabreeze-3d-sim/
 ├── css/style.css   # 面板样式
 └── js/
     ├── models.js   # Tello/机械臂/风机/环境 参数化建模 (尺寸与代码库一致)
-    ├── sim.js      # 物理 + 任务状态机 (PD 控制律与后端同构, 阻尼负号!)
+    ├── scene.js    # 场景 + 每帧 update: 位置/姿态/桨/叶轮/风粒子/轨迹/航线(渲染层)
+    ├── api.js      # 轮询后端 HTTP 状态接口 (fetchState / 按键转发)
     ├── hud.js      # 遥测/机械臂面板绑定
-    └── main.js     # 渲染主循环 (轨迹拖尾/风粒子/桨叶动画)
+    ├── config.js   # 全部魔法数字集中配置
+    └── main.js     # 主循环 (rAF + 键盘输入 + 后端轮询)
 ```
 
 ## 与 Python 后端的关系
 
-当前是**浏览器端独立演示版**：物理与控制律在 `sim.js` 内实现（结构对齐
-`MissionController`：同样的 8 状态机、Kp/Kd 位置环 PD、正弦阵风+随机游走进动力学）。
-后续要接真后端，按方案 4 的架构加 WebSocket 即可：
+当前是**浏览器端独立演示版**：渲染层在 `scene.js` 内实现（`api.js` 轮询后端
+`/api/state`，`main.js` 用 rAF 统一驱动 update/render）。物理与控制律（8 状态机、
+Kp/Kd 位置环 PD、正弦阵风+随机游走进动力学）在后端 `MissionController` 内，
+前端仅渲染后端状态。要接真后端，按方案 4 的架构加 WebSocket 即可：
 
 ```
-Python (EKF/PID/Quad.step)  ──ws──→  sim.js 的 sim.step() 替换为后端状态渲染
+Python (EKF/PID/Quad.step)  ──ws──→  scene.js 的 update() 渲染后端状态
 ```
 
 建议消息格式：`{"pos":[x,y,z], "vel":[...], "state":"HOVERING", "battery":82, "arm":[90,90,45]}`，

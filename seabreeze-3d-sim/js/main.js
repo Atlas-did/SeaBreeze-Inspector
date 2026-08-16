@@ -1,4 +1,4 @@
-﻿// SeaBreeze Inspector - Main Entry
+// SeaBreeze Inspector - Main Entry
 // =============================================================================
 import { SimScene } from './scene.js';
 import { HUD } from './hud.js';
@@ -52,6 +52,9 @@ function releaseAllKeys() {
 window.addEventListener('keydown', function (e) {
   if (isImeEvent(e)) { showImeWarning(); return; }
 
+  // 滑块/输入框聚焦时, 方向键还给控件(不转发后端)
+  if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+
   // 相机切换 (纯前端, 不转发)
   if (e.code === 'KeyC') {
     e.preventDefault();
@@ -101,6 +104,7 @@ var lastTime = performance.now();
 var pollTimer = 0;
 var logTimer = 0;
 var latestData = null;
+var pollInFlight = false;
 
 function animate() {
   requestAnimationFrame(animate);
@@ -109,15 +113,15 @@ function animate() {
   var dt = Math.min(0.05, (now - lastTime) / 1000);
   lastTime = now;
 
-  // Poll backend
+  // Poll backend (防在飞重入, 慢响应乱序也不会回写旧值)
   pollTimer += dt;
-  if (pollTimer >= CFG.POLL_INTERVAL_MS / 1000) {
+  if (pollTimer >= CFG.POLL_INTERVAL_MS / 1000 && !pollInFlight) {
     pollTimer = 0;
+    pollInFlight = true;
     backend.fetchState().then(function (data) {
+      pollInFlight = false;
       if (data && data.pos) {
-        latestData = data;
-        scene.update(data, dt);
-        hud.update(data, dt);
+        latestData = data;   // 只缓存,渲染统一走下方 rAF 分支,避免一帧双 update/render
 
         logTimer += CFG.POLL_INTERVAL_MS / 1000;
         if (logTimer >= CFG.CONSOLE_LOG_INTERVAL) {
