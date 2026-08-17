@@ -1,0 +1,6 @@
+{
+  "_comment": "vision-multimodal 的 Kimi 配置(由安装脚本生成)。provider=kimi 使用月之暗面 Moonshot 视觉模型。API Key 走环境变量 MOONSHOT_API_KEY。",
+  "provider": "kimi",
+  "base_url": "https://api.moonshot.cn/v1",
+  "model": "moonshot-v1-8k-vision-preview"
+}

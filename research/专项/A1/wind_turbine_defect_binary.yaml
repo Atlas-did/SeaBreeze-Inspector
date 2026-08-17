@@ -1,0 +1,10 @@
+# 二分类(单类缺陷)检测数据集配置 —— 由 A1-01 remap_to_binary.py 生成后使用
+# 用法: train_cli.py --data 本文件路径
+path: ../专项输出/binary_dataset   # 指向 remap 输出(相对项目根,按需改绝对路径)
+train: train
+val: val
+test: val          # 单类任务沿用 val 作 test(需 group split 后重指)
+
+nc: 1
+names:
+  0: defect
