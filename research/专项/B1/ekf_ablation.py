@@ -18,10 +18,12 @@ CHI2_95_2DOF = 5.991  # 2 维新息 χ²(0.95)
 
 
 def run_ekf(Q_d, sigma_acc, sigma_pos, dt=0.01, n=1000, scenario='step',
-            adaptive=False, alpha=0.5, q_scale_max=30.0, seed=0):
+            adaptive=False, alpha=0.5, q_scale_max=30.0, seed=0, u_const=0.0):
     """单轴扰动观测仿真。返回 dict(d_true, d_hat, innovations, mahal)。
 
-    状态 x=[pos, vel, d];已知控制 u[k](仿真里设 u=0,即"悬停指令加速度为 0",扰动独占加速度)。
+    状态 x=[pos, vel, d];已知控制 u[k]=u_const(默认 0,即"悬停指令加速度为 0",
+    扰动独占加速度)。验证 u 馈入机制时设非零值(如 1.0):正确实现下 d_hat 应跟踪
+    d_true 而非 d_true+u_const。
     真值推进: pos += vel*dt + 0.5*(u+d)*dt²; vel += (u+d)*dt; d 随机游走。
     观测: a_imu = u + d + N(0,σ_acc²); x_opt = pos + N(0,σ_pos²)。
     新息(减去已知 u 后): y = [(a_imu-u)-d_hat, x_opt-pos_hat]。
@@ -48,7 +50,7 @@ def run_ekf(Q_d, sigma_acc, sigma_pos, dt=0.01, n=1000, scenario='step',
     else:
         d_true = np.full(n, 1.0)
 
-    u = np.zeros(n)  # 悬停指令加速度 0;d 是唯一的加速度来源
+    u = np.full(n, u_const)  # 已知控制加速度常量;d 是扰动,两者叠加成总加速度
     # 转移/输入/观测
     F = np.array([[1.0, dt, 0.5 * dt ** 2],
                   [0.0, 1.0, dt],
@@ -75,6 +77,8 @@ def run_ekf(Q_d, sigma_acc, sigma_pos, dt=0.01, n=1000, scenario='step',
         P = F @ P @ F.T + Qk
         # 更新(新息减去已知控制后,加速度通道直接观测 d)
         y = z - H @ xh
+        y[0] -= u[k]  # 真正的 u 馈入:从加速度观测中减去已知控制。旧版漏了这一步,
+        #             u=0 时数值恰好对,一设 u=1.0 偏差就被吃进 d_hat(d_hat→d_true+u)
         S = H @ P @ H.T + R
         K = P @ H.T @ np.linalg.solve(S, np.eye(S.shape[0]))
         xh = xh + K @ y
@@ -125,6 +129,9 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--out', default='ekf_ablation_report.json')
     ap.add_argument('--seed', type=int, default=0)
+    ap.add_argument('--u-const', type=float, default=0.0,
+                    help='已知控制加速度常量(m/s²)。设非零(如 1.0)验证 u 馈入:'
+                         '正确实现下 d_hat 应跟踪 d_true,不偏到 d_true+u。默认 0 保持消融数字不变')
     a = ap.parse_args()
     dt = 0.01; n = 1000; step_idx = n // 2
 
@@ -134,6 +141,7 @@ def main():
 
     report = {'u_feed': True, 'scenario': 'step', 'dt_s': dt, 'n': n,
               'sigma_acc': SIGMA_ACC, 'sigma_pos': SIGMA_POS, 'Q_base': Q_BASE,
+              'u_const': a.u_const,
               'seed': a.seed,
               'adaptive': {'alpha': 0.5, 'q_scale_max': 30.0,
                            'note': 'Mahalanobis D²>χ²₂(0.95)=5.991 时放大 Q,与真实观测器同一机制(真实:α=0.3/×10)'}}
@@ -142,7 +150,7 @@ def main():
     abl = {}
     for name, (qd, adapt) in {'fixed_Q': (Q_BASE, False), 'adaptive_Q': (Q_BASE, True)}.items():
         res = run_ekf(qd, SIGMA_ACC, SIGMA_POS, dt=dt, n=n, scenario='step',
-                      adaptive=adapt, seed=a.seed)
+                      adaptive=adapt, seed=a.seed, u_const=a.u_const)
         m = _metrics(res, dt, step_idx=step_idx)
         m['Q_d_base'] = qd
         m['adaptive'] = adapt
@@ -150,15 +158,29 @@ def main():
     report['fixed_vs_adaptive'] = abl
 
     # ---- 静风基线(应≈观测噪声地板,期望 <0.05) ----
-    res_static = run_ekf(Q_BASE, SIGMA_ACC, SIGMA_POS, dt=dt, n=n, scenario='static', seed=a.seed)
+    res_static = run_ekf(Q_BASE, SIGMA_ACC, SIGMA_POS, dt=dt, n=n, scenario='static',
+                         seed=a.seed, u_const=a.u_const)
     report['static_baseline'] = {'d_hat_std': float(res_static['d_hat'].std()),
                                  'd_hat_mean': float(res_static['d_hat'].mean())}
+
+    # ---- u 馈入自检:非零 u 下 d_hat 必须跟踪 d_true(而不是 d_true+u) ----
+    # 旧版在 update 一步漏了「新息减 u」(y[0] -= u),u=0 时数值恰好对;这个自检负责锁死该机制。
+    res_u = run_ekf(Q_BASE, SIGMA_ACC, SIGMA_POS, dt=dt, n=n, scenario='step',
+                    seed=a.seed, u_const=1.0)
+    step_idx_local = n // 2
+    tail_u = slice(int(step_idx_local + 0.7 * (len(res_u['d_hat']) - step_idx_local)), len(res_u['d_hat']))
+    d_hat_tail = float(np.mean(res_u['d_hat'][tail_u]))
+    report['u_feed_check'] = {
+        'u_const': 1.0, 'd_true_after_step': 2.0, 'd_hat_tail_mean': d_hat_tail,
+        'ok': bool(abs(d_hat_tail - 2.0) < 0.05),
+        'note': 'ok=True 表示 u 馈入生效(未被误当扰动);旧版此值≈3.0(偏差被吃进 d_hat)'}
 
     # ---- 次消融: Q×R 二维网格(收敛时间 + RMSE,展示 Q↔跟踪速度、R↔噪声抑制的解耦) ----
     grid = {}
     for qd in [1e-5, 1e-4, 1e-3]:
         for sa in [0.02, 0.05, 0.2]:
-            res = run_ekf(qd, sa, SIGMA_POS, dt=dt, n=n, scenario='step', seed=a.seed)
+            res = run_ekf(qd, sa, SIGMA_POS, dt=dt, n=n, scenario='step',
+                          seed=a.seed, u_const=a.u_const)
             m = _metrics(res, dt, step_idx=step_idx)
             grid[f'Qd={qd:g},σacc={sa:g}'] = m
     report['QxR_grid'] = grid
@@ -171,6 +193,9 @@ def main():
         print(f"  {name}({tag}): 收敛={m['settle_time_ms']:.0f}ms, 超调={m['overshoot_pct']:.1f}%, "
               f"稳态RMSE={m.get('steady_rmse', float('nan')):.4f}")
     print(f"  静风基线 d_hat std={report['static_baseline']['d_hat_std']:.4f} (期望 <0.05)")
+    chk = report['u_feed_check']
+    print(f"  u 馈入自检(u=1.0, d_true=2.0): d_hat 尾部均值={chk['d_hat_tail_mean']:.3f} "
+          f"-> {'✅ 跟踪真值' if chk['ok'] else '❌ 偏差被吃进扰动'}")
     print(f"  -> {a.out}")
 
 
