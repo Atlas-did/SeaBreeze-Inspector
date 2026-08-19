@@ -1,6 +1,6 @@
 # SeaBreeze Inspector — 3D 巡检仿真 (Three.js)
 
-> 对应 `3D_SIMULATION_OPTIONS.md` 方案 4（Three.js + Web 面板）的落地实现。
+> 对应 `../docs/3D_SIMULATION_OPTIONS.md` 方案 4（Three.js + Web 面板）的落地实现。
 > 纯静态页面，无需构建、无需安装，浏览器直接打开。
 
 ## 运行
@@ -59,6 +59,6 @@ JS 侧只保留渲染与输入转发。
 
 ## 配套 Blender 脚本
 
-`../seabreeze_models_bpy.py.txt`（重命名为 `.py` 后 `blender -b -P` 运行）可程序化生成
+`seabreeze_models_bpy.py`（直接 `blender -b -P` 运行）可程序化生成
 同尺寸模型并导出 GLB —— 之后把 `models.js` 里的程序化建模换成 `GLTFLoader` 加载
 `seabreeze_models.glb`，即完成"Blender 资产 → Web 仿真"的闭环。

@@ -26,8 +26,11 @@ main.py (主调度 — 有限状态机)
     ├── utils/
     │   ├── config.py           ← yaml
     │   ├── logger.py
-    │   └── communication.py    ← queue, threading
-    ├── safety_guard.py
+    │   ├── units.py
+    │   └── bus.py              ← pub/sub
+    ├── mission/
+    │   ├── safety.py           ← failsafe heartbeat
+    │   └── states.py
     └── frontend/
         └── dashboard.py        ← tkinter, PIL
 

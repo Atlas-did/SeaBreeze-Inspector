@@ -3,7 +3,7 @@
 > An open-source UAV + robotic arm cooperative system for offshore wind turbine inspection.
 > Built with DJI Tello, Arduino, and Python.
 
-[![Test Suite](https://github.com/offshore-wind-uav-arm/offshore-wind-uav-arm/actions/workflows/test.yml/badge.svg)](https://github.com/offshore-wind-uav-arm/offshore-wind-uav-arm/actions/workflows/test.yml)
+[![Test Suite](https://github.com/Atlas-did/SeaBreeze-Inspector/actions/workflows/test.yml/badge.svg)](https://github.com/Atlas-did/SeaBreeze-Inspector/actions/workflows/test.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -48,7 +48,7 @@ python -m backend.simulation.simulation
 
 # Web 3D simulation (main demo)
 python backend/simulation/http_bridge.py
-# Then open: http://localhost:8800
+# Then open: http://localhost:8811
 ```
 
 ### 3. Flash Arduino Firmware

@@ -82,6 +82,9 @@ def main():
                                      eta_v, eta_h)
         sens[key] = {'lo': float(v_lo), 'hi': float(v_hi), 'range': float(v_hi - v_lo)}
     report['sensitivity'] = dict(sorted(sens.items(), key=lambda kv: -abs(kv[1]['range'])))
+    # 参数来源溯源(答辩时可自证哪些是实测/假设/经验值)
+    params_source = cfg.get('params_source', {})
+    report['params_source'] = {k: params_source.get(k, 'assumed') for k in p}
 
     with open(a.out, 'w', encoding='utf-8') as f:
         json.dump(report, f, ensure_ascii=False, indent=2)
@@ -89,7 +92,7 @@ def main():
     print(f"  vmax: 均值 {report['vmax_mean']:.1f} m/s, 中位 {report['vmax_p50']:.1f}, "
           f"5~95% [{report['vmax_p05']:.1f}, {report['vmax_p95']:.1f}]")
     print(f"  12m/s(6级风)正裕度比例: {p_ok:.1%}")
-    print(f"  敏感性排序: {', '.join(sens.keys())}")
+    print(f"  敏感性排序: {', '.join(report['sensitivity'].keys())}")
     print(f"  -> {a.out}")
 
 
