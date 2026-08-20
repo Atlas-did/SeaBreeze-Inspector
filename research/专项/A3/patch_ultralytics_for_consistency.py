@@ -577,7 +577,7 @@ def data_path_smoke(root=None):
     print("[OK] 数据路径冒烟通过(CPU, on-disk)")
     print(f"  batch: n_clean={n_clean}, img={tuple(batch['img'].shape)}, "
           f"det 标签数={batch['cls'].shape[0]}(fog invisible 已按掩码剔除)")
-    print(f"  总损失={total:.4f}, loss_items={[round(float(x), 6) for x in items]}, L_feat>0 ✅")
+    print(f"  总损失={total:.4f}, loss_items={[round(float(x), 6) for x in items]}, L_feat>0 [OK]")
     print(f"  冒烟数据在: {root}")
     return root
 

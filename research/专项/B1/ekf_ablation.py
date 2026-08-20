@@ -195,7 +195,7 @@ def main():
     print(f"  静风基线 d_hat std={report['static_baseline']['d_hat_std']:.4f} (期望 <0.05)")
     chk = report['u_feed_check']
     print(f"  u 馈入自检(u=1.0, d_true=2.0): d_hat 尾部均值={chk['d_hat_tail_mean']:.3f} "
-          f"-> {'✅ 跟踪真值' if chk['ok'] else '❌ 偏差被吃进扰动'}")
+          f"-> {'[OK] 跟踪真值' if chk['ok'] else '[FAIL] 偏差被吃进扰动'}")
     print(f"  -> {a.out}")
 
 
