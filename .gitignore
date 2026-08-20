@@ -68,6 +68,12 @@ docs/*.md
 !docs/TESTING.md
 HANDOFF.md
 
+# Internal review/evidence docs (kept off the public repo)
+REVIEW_VERDICT.md
+research/README.md
+research/EVIDENCE_MAP.md
+research/专项/GAP_TRACKER.md
+
 data/raw/
 runs/detect/
 seabreeze-3d-sim/train_v3.py
