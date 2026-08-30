@@ -113,6 +113,8 @@ class MissionController:
 
         # 安全监控
         self._emergency_reason = ""
+        self._emergency_sent = False  # P0-1: 紧急下降是否已下发(防每帧重复)
+        self._ekf_honesty_warned = False  # P0-3: EKF 假观测告警只打一次
 
         # 上一次的控制输出 (用于EKF predict时传入已知控制输入)
         self._last_control_output = np.zeros(3)
@@ -169,7 +171,7 @@ class MissionController:
         monitor.THRESHOLDS["battery_land"] = self._cfg_val("safety.low_battery_land_threshold", 20)
         monitor.THRESHOLDS["battery_kill"] = self._cfg_val("safety.battery_kill", 10)
         monitor.THRESHOLDS["height_land"] = self._cfg_val("safety.boundary.z_max", 300)
-        monitor.THRESHOLDS["height_kill"] = self._cfg_val("safety.boundary.z_max", 400)
+        monitor.THRESHOLDS["height_kill"] = self._cfg_val("safety.boundary.z_kill", 500)
         return monitor
 
     # =========================================================================
@@ -386,11 +388,18 @@ class MissionController:
         # ---------- EMERGENCY: 紧急状态 ----------
         elif self.state == "EMERGENCY":
             # 紧急下降目标: 地面 (触发紧急时 trigger_emergency 已打印入口日志)
+            # P0-1 修复: 受控降落, 只在首次进入时下发一次下降; 近地面(<3m)升级硬停桨。
             self.target_pos[2] = 0.0
-            self.drone.emergency()
+            if not getattr(self, "_emergency_sent", False):
+                self.drone.emergency()
+                self._emergency_sent = True
+            # 近地面(<3m 且仍在飞) -> 升级为硬停桨(唯一安全允许 kill 的场景)
+            if self.drone.is_flying and self.current_pos[2] < 300:
+                self.drone.kill()
             # 转为降落状态 (SimDroneAdapter 延迟 is_flying=False 直到物理触地)
             if not self.drone.is_flying:
                 self.state = "IDLE"
+                self._emergency_sent = False
                 print("[MAIN] 紧急降落完成")
 
         # P0-B: 统一发送控制指令 (一帧只发一次)
@@ -445,10 +454,32 @@ class MissionController:
             self._battery = drone_state.get("battery", 100)
             height = drone_state.get("height", 0)
 
+            # P0-2b 修复: 真机姿态从 get_attitude() 接线(此前 current_attitude 恒 0,
+            # 姿态保护是摆设)。Tello 真机不提供姿态, 返回空 dict 时回退 [0,0,0]。
+            att = self.drone.get_attitude()
+            if isinstance(att, dict) and att:
+                self.current_attitude = np.array(
+                    [att.get("roll", 0), att.get("pitch", 0), att.get("yaw", 0)],
+                    dtype=float)
+            elif isinstance(att, (list, tuple)) and len(att) >= 3:
+                self.current_attitude = np.asarray(att[:3], dtype=float)
+            else:
+                # Tello SDK 不提供姿态 -> 诚实回退, 不与假值混淆
+                self.current_attitude = np.zeros(3)
+
+            # P0-3 诚实化: 真机模式下 IMU 三轴与光流位置均为假观测
+            # (Tello SDK 不提供加速度; 光流用上一帧 EKF 估计 = 自我循环)。
+            # EKF 定位/扰动观测仅仿真成立; 真机需外部定位(ArUco/塔筒特征)接入
+            # 才能启用。此处显式告警一次, 避免把"自我循环"误当作定位能力。
+            if not getattr(self, "_ekf_honesty_warned", False):
+                print("[WARN] 真机 EKF 定位是自我循环假观测 "
+                      "(IMU=0, 光流=上一帧估计); 需外部定位输入方为有效定位。")
+                self._ekf_honesty_warned = True
+
             return np.array([
                 0, 0, 0,                     # IMU (Tello SDK不直接提供)
-                self.current_pos[0],         # 光流X (近似)
-                self.current_pos[1],         # 光流Y (近似)
+                self.current_pos[0],         # 光流X (近似, 自我循环)
+                self.current_pos[1],         # 光流Y (近似, 自我循环)
                 float(height),               # 气压计高度
             ])
 
@@ -595,6 +626,7 @@ class MissionController:
         """触发紧急状态 (直接进入 EMERGENCY, 不经过转换表校验)"""
         self._emergency_reason = reason
         self.state = "EMERGENCY"
+        self._emergency_sent = False  # P0-1: 重新武装受控降落
         self._state_entry_time = time.time()
         print("[EMERGENCY] {}".format(reason))
 
@@ -614,14 +646,30 @@ class MissionController:
         return True
 
     def stop(self):
-        """优雅关闭 (P1-11): 降落→保存日志→停止线程→关闭连接"""
+        """优雅关闭 (P1-11): 降落→轮询触地→保存日志→停止线程→关闭连接
+        P0-1 修复: 原来的 land()+sleep(2) 对高空降落无效(50m 远超 2s)且无兜底,
+        改为轮询高度直到触地或超时, 超时才升级 hard kill。"""
         print("[MAIN] 正在执行优雅关闭...")
 
-        # 1. 尝试降落
+        # 1. 尝试降落并轮询触地
         if self.drone.is_flying:
             print("[MAIN] 无人机降落中...")
             self.drone.land()
-            time.sleep(2)
+            # P0-1: 轮询高度直至触地或超时(默认 30s), 而非固定 sleep(2)
+            timeout_s = float(self._cfg_val("safety.land_timeout_s", 30.0))
+            t0 = time.time()
+            while time.time() - t0 < timeout_s:
+                try:
+                    h = float(self.drone.get_height())
+                except Exception:
+                    h = float("nan")
+                if not self.drone.is_flying or (h < 20):
+                    break
+                time.sleep(0.1)
+            # 超时仍未触地 -> 升级硬停桨(仅作为最后手段; kill() 内部会判断近地面)
+            if self.drone.is_flying:
+                print("[WARN] 降落超时, 执行硬停桨")
+                self.drone.kill()
 
         # 2. 停止主循环
         self._running = False

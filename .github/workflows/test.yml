@@ -27,7 +27,6 @@ jobs:
         env:
           SDL_VIDEODRIVER: dummy
         run: python scripts/check_deps.py --ci --json
-        continue-on-error: true
 
   test:
     needs: deps-check
@@ -63,13 +62,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
-        continue-on-error: true
 
       - name: Run dependency check
         env:
           SDL_VIDEODRIVER: dummy
         run: python scripts/check_deps.py --ci
-        continue-on-error: true
 
       - name: Run tests (Ubuntu with xvfb)
         if: runner.os == 'Linux'
@@ -84,6 +81,13 @@ jobs:
           SDL_VIDEODRIVER: dummy
           PYTHONIOENCODING: utf-8
         run: python -m pytest tests/ -v --tb=short
+
+      - name: Lint (flake8, report-only)
+        # P0-4 注: 全仓尚有历史 lint 债(F401/E128/E261 等约 27 处)未一次清理,
+        # 此处只报告不阻断, 避免历史债阻断本轮 P0 安全修复的合入。
+        # 待 lint 债清零后再移除 --exit-zero。
+        if: runner.os == 'Linux'
+        run: python -m flake8 backend/ --count --exit-zero --max-line-length=120 --extend-ignore=E501,W503
 
       - name: Sim headless smoke test
         env:

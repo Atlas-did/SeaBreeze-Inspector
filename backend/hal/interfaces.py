@@ -35,7 +35,25 @@ class DroneInterface(ABC):
 
     @abstractmethod
     def emergency(self) -> bool:
-        """Immediate motor stop. Returns True if command accepted."""
+        """Controlled emergency descent — NOT an immediate motor stop.
+
+        Safety semantics: at altitude this must command a fast but *controlled*
+        descent (high-rate downward RC + attitude monitoring), looping until the
+        drone touches down or a timeout elapses. Only near the ground (< 3 m)
+        may an implementation escalate to a hard motor cut.
+
+        Returns True if the descent was accepted.
+        """
+        ...
+
+    @abstractmethod
+    def kill(self) -> bool:
+        """Immediate motor stop (hard kill). Use ONLY near the ground (< 3 m).
+
+        This is the dangerous path that previously lived inside emergency():
+        on a DJI Tello, SDK emergency() cuts motors instantly and the platform
+        free-falls from current altitude. Must never be called at height.
+        """
         ...
 
     @abstractmethod

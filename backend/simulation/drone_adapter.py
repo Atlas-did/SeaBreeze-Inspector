@@ -60,6 +60,12 @@ class SimDroneAdapter(DroneInterface):
         self._emergency = True
         return True
 
+    def kill(self) -> bool:
+        # Hard motor cut in simulation: physics model has no free-fall, so force
+        # an immediate drop to ground via the same deferred-touchdown path.
+        self._emergency = True
+        return True
+
     def mark_landed(self) -> None:
         """SimRuntime calls this when physics reaches ground (pos[2] ≈ 0).
 

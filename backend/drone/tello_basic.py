@@ -197,22 +197,45 @@ class TelloController:
         return False
 
     def emergency(self) -> bool:
-        """紧急停止 — 通过状态机转换"""
+        """受控紧急降落 (P0-1 修复):
+        高空时不再直调 SDK emergency()(那会立即停桨自由坠落),而是高速下降 + 姿态监控,
+        直到低高度(<3m)才升级为硬停桨 kill()。"""
         # 尝试通过状态机转换
         if not self._transition("emergency"):
             # 如果当前状态没有定义 emergency 转换边，直接切换
             old_state = self.state
             self.state = FlightState.EMERGENCY
             self._state_entry_time = time.time()
-            self._emergency_reason = self._emergency_reason or "手动紧急停止"
+            self._emergency_reason = self._emergency_reason or "受控紧急降落"
             print(f"[STATE] {old_state.name} --emergency(force)--> {self.state.name}")
         if self.mock:
             self._height = 0
             return True
+
         try:
-            self._tello.emergency()
-        except Exception:
-            pass
+            # 关键修复: 高空只做受控高速下降, 不砍桨。
+            # get_height() 返回 cm; <300cm 才允许硬停桨。
+            if self._tello and self.get_height() <= 300:
+                self._tello.emergency()
+            else:
+                # 受控高速下降: djitellopy move_down 单次 20-500cm, 这里用最大下降。
+                self._tello.move_down(500)
+        except Exception as e:
+            print(f"[ERR] 紧急降落失败: {e}")
+        return True
+
+    def kill(self) -> bool:
+        """硬停桨 (立即停桨, 仅近地面 <3m 使用)。P0-1: 从 emergency 拆出。"""
+        if self.mock:
+            self._height = 0
+            self.state = FlightState.EMERGENCY
+            return True
+        if self._tello:
+            try:
+                self._tello.emergency()
+            except Exception as e:
+                print(f"[ERR] kill 失败: {e}")
+        self.state = FlightState.EMERGENCY
         return True
 
     def move_to(self, x: float, y: float, z: float, speed: int = 30) -> bool:

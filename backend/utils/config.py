@@ -119,6 +119,7 @@ class ConfigLoader:
             "safety.attitude_max_deg": ((int, float), False, 30),
             "safety.link_timeout_s": ((int, float), False, 2.0),
             "safety.boundary.z_max": ((int, float), False, 300),
+            "safety.boundary.z_kill": ((int, float), False, 500),
             "safety.safe_point.x": ((int, float), False, 0),
             "safety.safe_point.y": ((int, float), False, 0),
             "safety.safe_point.z": ((int, float), False, 100),

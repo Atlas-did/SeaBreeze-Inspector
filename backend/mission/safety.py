@@ -44,6 +44,7 @@ class FailsafeMonitor:
         elif event.level == SafetyLevel.LAND:
             drone.land()
         elif event.level == SafetyLevel.KILL:
+            # P0-1: KILL 语义 = 受控紧急降落 emergency()(近地面才升级 kill())
             drone.emergency()
     """
 
@@ -79,7 +80,13 @@ class FailsafeMonitor:
         """
         if attitude is None:
             attitude = [0, 0, 0]
-        max_att = max(abs(a) for a in attitude)
+        # P0-2b: 防御空序列/空 dict(真机 get_attitude() 可能返回 {}),
+        # 避免 max() 对空迭代器抛 ValueError。
+        try:
+            vals = list(attitude.values()) if isinstance(attitude, dict) else list(attitude)
+        except TypeError:
+            vals = [0, 0, 0]
+        max_att = max(abs(a) for a in vals) if vals else 0.0
         now = time.time()
         elapsed = now - self._last_heartbeat
 
