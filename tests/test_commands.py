@@ -45,6 +45,15 @@ def test_result_json_serializable_and_evidence_level():
     assert d["target_m"] == 1.5
 
 
+def test_result_evidence_level_real_flight_not_downgraded():
+    """F08: 真机数据显式标 real-flight 时,to_dict 原样保留,不得吞成 simulation-only。"""
+    r = CommandResult(op="altitude_hold", backend="tello", accepted=True,
+                      target_m=1.5, measured_m=1.48, error_m=0.02,
+                      settled=True, evidence_level="real-flight")
+    d = json.loads(json.dumps(r.to_dict()))
+    assert d["evidence_level"] == "real-flight"
+
+
 def test_instant_takeoff_on_mock():
     tello = MockTello()
     cmd = FlightCommand(op="takeoff", note="mock instant")

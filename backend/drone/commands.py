@@ -72,12 +72,14 @@ class CommandResult:
     note: str = ""
     ts: str = field(default_factory=lambda: time.strftime("%Y-%m-%dT%H:%M:%S%z"))
     extra: Dict[str, Any] = field(default_factory=dict)
+    # F08: 证据等级,默认 simulation-only;真机首飞时显式传 "real-flight",
+    # 避免真实数据被静默降格为仿真数据(to_dict 不再写死)。
+    evidence_level: str = "simulation-only"
 
     def to_dict(self) -> Dict[str, Any]:
-        """JSON 可序列化；evidence_level 恒为 simulation-only，不冒充实测。"""
+        """JSON 可序列化;证据等级由 evidence_level 字段决定(默认 simulation-only)。"""
         return {
             **asdict(self),
-            "evidence_level": "simulation-only",
             "source": "SeaBreeze-Inspector",
         }
 
