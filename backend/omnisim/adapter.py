@@ -98,10 +98,16 @@ class OmniSimDriver:
 
         for _ in range(n):
             st = self._get_state()
-            z_trace.append(float(st.get("z", 0.0)))
+            # z 缺失(None/无键)时不静默当 0 参与均值, 否则会污染 altitude_m;
+            # 如实跳过并在最终报告里体现缺失。
+            if st.get("z") is not None:
+                z_trace.append(float(st["z"]))
             modes.append(str(st.get("mode", "")))
             time.sleep(poll_dt)
 
+        if not z_trace:
+            raise OmniSimBridgeError(
+                "bridge 未返回任何有效高度遥测(z 全程缺失), 无法计算稳态高度。")
         tail = z_trace[-max(1, int(5.0 / poll_dt)):]
         return {
             "altitude_m": float(mean(tail)),

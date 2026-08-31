@@ -19,13 +19,18 @@ from backend.simulation.altitude_driver import build_sim_driver
 
 def test_altitude_hold_ideal_is_deterministic():
     """静风理想模型：同种子两次运行稳态误差一致（可复现性）。"""
-    driver = build_sim_driver(calm=True)
-    r1 = run_altitude_hold(driver, target_m=1.5, settle_s=20.0, seed=42)
-    assert r1.accepted is True
-    assert r1.state == "HOVERING"
-    assert r1.measured_m is not None
+    driver1 = build_sim_driver(calm=True)
+    r1 = run_altitude_hold(driver1, target_m=1.5, settle_s=20.0, seed=42)
+    driver2 = build_sim_driver(calm=True)
+    r2 = run_altitude_hold(driver2, target_m=1.5, settle_s=20.0, seed=42)
+    assert r1.accepted is True and r2.accepted is True
+    assert r1.state == "HOVERING" and r2.state == "HOVERING"
+    assert r1.measured_m is not None and r2.measured_m is not None
     # 静风 + 近零噪声：稳态应精确落在目标附近（容差放宽到 5mm）
     assert abs(r1.error_m) < 0.005, f"理想工况误差应≈0，实际 {r1.error_m}"
+    # 可复现性：同种子两次运行稳态误差一致
+    assert abs(r1.error_m - r2.error_m) < 1e-9, \
+        f"同种子两次运行应一致，实际 {r1.error_m} vs {r2.error_m}"
 
 
 def test_altitude_hold_windy_is_nonzero():
