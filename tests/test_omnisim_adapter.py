@@ -145,3 +145,41 @@ def test_omnisim_driver_set_target_raises_on_unreachable():
 def test_omnisim_backend_name():
     driver = OmniSimDriver(base_url="http://example.test")
     assert driver.backend_name() == "omnisim"
+
+
+def test_settle_raises_when_z_never_present(monkeypatch):
+    """F04: z 全程缺失时 settle 抛 OmniSimBridgeError,而非静默产出 z≈0 的伪稳态。
+
+    直接 monkeypatch _get_state 返回无 z 键的遥测,并把 time.sleep 替换成 no-op,
+    避免真实等待。
+    """
+    driver = OmniSimDriver(base_url="http://127.0.0.1:1")
+    calls = {"n": 0}
+    def fake_state():
+        calls["n"] += 1
+        return {"mode": "hover"}  # 无 "z" 键
+    monkeypatch.setattr(driver, "_get_state", fake_state)
+    monkeypatch.setattr("backend.omnisim.adapter.time.sleep", lambda _s: None)
+    import pytest as _pytest
+    from backend.omnisim.adapter import OmniSimBridgeError
+    with _pytest.raises(OmniSimBridgeError) as exc:
+        driver.settle(seconds=1.0, dt=0.2)
+    assert "z" in str(exc.value) or "高度" in str(exc.value)
+    assert calls["n"] >= 1
+
+
+def test_settle_skips_missing_z_not_pollutes_mean(monkeypatch):
+    """F04: 部分样本缺 z 时跳过,不把 0.0 混进均值。"""
+    driver = OmniSimDriver(base_url="http://127.0.0.1:1")
+    seq = iter([
+        {"mode": "hover", "z": 1.0},
+        {"mode": "hover"},                 # 缺 z,应跳过
+        {"mode": "hover", "z": 3.0},
+        {"mode": "hover"},                 # 缺 z,应跳过
+    ])
+    monkeypatch.setattr(driver, "_get_state", lambda: next(seq))
+    monkeypatch.setattr("backend.omnisim.adapter.time.sleep", lambda _s: None)
+    # dt=0.5, seconds=2.0 -> n=4 (2.0/0.5 整除,避免浮点截断)
+    out = driver.settle(seconds=2.0, dt=0.5)
+    # 只有 1.0 和 3.0 参与均值 -> 2.0;若把缺 z 当 0 则会偏到 1.0
+    assert abs(out["altitude_m"] - 2.0) < 1e-9
