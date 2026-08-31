@@ -1,0 +1,21 @@
+{
+  "op": "altitude_hold",
+  "backend": "sim",
+  "accepted": true,
+  "target_m": 1.5,
+  "measured_m": 1.4999999999999998,
+  "error_m": 2.220446049250313e-16,
+  "steady_std_m": 2.220446049250313e-16,
+  "settled": true,
+  "state": "HOVERING",
+  "sim_seconds": 40.0,
+  "seed": 42,
+  "note": "",
+  "ts": "2026-08-30T22:12:42+0800",
+  "extra": {
+    "final_m": 1.4999999999999996,
+    "n_steps": 2000
+  },
+  "evidence_level": "simulation-only",
+  "source": "SeaBreeze-Inspector"
+}

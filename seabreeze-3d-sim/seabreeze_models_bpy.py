@@ -22,12 +22,16 @@
 
 import bpy
 import math
+import os
 from mathutils import Vector
 
 # ---------------- 总开关 ----------------
 EXPORT_OBJ = False          # 导出 tello.obj / arm.obj / turbine.obj
 EXPORT_GLB = True           # 导出 seabreeze_models.glb (推荐, 给 Three.js/Ursina 用)
-EXPORT_DIR = "//"           # "//" = 当前 .blend / 脚本所在目录
+# 导出到脚本所在目录（"//" 在无头模式无 .blend 文件时无效，Blender 5.x 会报错）
+# 无头 `blender -b -P script.py` 下 __file__ 可能为 None，回退到当前工作目录。
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__)) if __file__ else os.getcwd()
+EXPORT_DIR = _SCRIPT_DIR + os.sep
 
 DEMO_SCALE_TURBINE = 0.1    # 风机演示缩放 (真实 30m 塔太高)
 
@@ -307,6 +311,39 @@ def build_turbine(mats):
 # =============================================================================
 # 4. 动画 (桨叶 & 风机叶片旋转)
 # =============================================================================
+def _set_linear_cycles(action):
+    """跨版本把 action 的所有关键帧设为 LINEAR 插值 + CYCLES 循环。
+
+    Blender ≤4.x:  action.fcurves / fcurve.keyframe_points
+    Blender 5.x :  action.layers[0].strip[0].channelbag.slot(...).fcurves
+    两种路径都尝试，静默跳过不兼容的（动画是演示性的，缺失不致命）。
+    """
+    import traceback
+    try:
+        curves = action.fcurves
+    except Exception:
+        curves = None
+    if curves is None and getattr(action, "layers", None):
+        try:
+            strip = action.layers[0].strip[0]
+            bags = strip.channelbag.values() if hasattr(strip, "channelbag") else []
+            curves = []
+            for bag in bags:
+                for slot in getattr(bag, "slot", {}).values():
+                    curves.extend(slot.fcurves)
+        except Exception:
+            curves = None
+    if not curves:
+        return
+    for fc in curves:
+        try:
+            for kp in fc.keyframe_points:
+                kp.interpolation = 'LINEAR'
+            fc.modifiers.new('CYCLES')
+        except Exception:
+            pass
+
+
 def add_spin_anim(obj, axis='Z', frames=(1, 60), cycles=2.0):
     """给对象加线性旋转动画 (loop)"""
     obj.rotation_mode = 'XYZ'
@@ -317,10 +354,7 @@ def add_spin_anim(obj, axis='Z', frames=(1, 60), cycles=2.0):
     obj.rotation_euler[idx] = math.pi * 2 * cycles
     obj.keyframe_insert("rotation_euler", index=idx, frame=f1)
     if obj.animation_data and obj.animation_data.action:
-        for fc in obj.animation_data.action.fcurves:
-            for kp in fc.keyframe_points:
-                kp.interpolation = 'LINEAR'
-            cyc = fc.modifiers.new('CYCLES')
+        _set_linear_cycles(obj.animation_data.action)
 
 # =============================================================================
 # 主流程
@@ -384,8 +418,8 @@ def main():
     fill.data.shape = 'DISK'
     fill.data.size = 2000
 
-    # 渲染设置 (EEVEE 快速出图)
-    scene.render.engine = 'BLENDER_EEVEE_NEXT'
+    # 渲染设置 (EEVEE 快速出图；Blender 5.x 起枚举名统一为 BLENDER_EEVEE)
+    scene.render.engine = 'BLENDER_EEVEE'
     scene.render.resolution_x = 1280
     scene.render.resolution_y = 720
 
