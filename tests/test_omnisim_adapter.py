@@ -120,6 +120,20 @@ def test_omnisim_driver_altitude_hold_against_fake_bridge():
     assert bridge.actions and bridge.actions[-1]["action"] == "takeoff"
 
 
+def test_omnisim_driver_model_labeled_in_result():
+    """F02: 机型("谁在飞")显式进入结果 extra,消除 Mavic/Tello 冒充歧义。"""
+    with FakeMavicBridge() as bridge:
+        driver = OmniSimDriver(base_url=bridge.base_url, model="mavic-2-pro")
+        r = run_altitude_hold(driver, target_m=1.5, settle_s=1.0, dt=0.05)
+    # 默认机型
+    assert r.extra.get("model") == "mavic-2-pro"
+    # 覆盖机型也能跟着数据走
+    with FakeMavicBridge() as bridge:
+        driver = OmniSimDriver(base_url=bridge.base_url, model="tello")
+        r2 = run_altitude_hold(driver, target_m=1.5, settle_s=1.0, dt=0.05)
+    assert r2.extra.get("model") == "tello"
+
+
 def test_omnisim_driver_set_target_returns_false_on_busy(monkeypatch):
     def _raise_busy(*a, **k):
         raise OmniSimBridgeError("busy", status=409, body={"error": "busy"})

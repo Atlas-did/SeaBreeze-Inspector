@@ -205,6 +205,11 @@ def run_altitude_hold(
     stats = driver.settle(seconds=settle_s, dt=dt)
 
     measured = stats.get("altitude_m")
+    _extra = {"final_m": stats.get("final_m"), "n_steps": stats.get("n_steps")}
+    # F02: 若驱动声明了机型(如 omnisim 的 "mavic-2-pro"),透传进 extra,
+    # 让"谁在飞"跟着数据走,消除 Mavic/Tello 冒充歧义。
+    if stats.get("model"):
+        _extra["model"] = stats["model"]
     return CommandResult(
         op="altitude_hold",
         backend=driver.backend_name(),
@@ -218,5 +223,5 @@ def run_altitude_hold(
         sim_seconds=float(settle_s),
         seed=seed,
         note=note,
-        extra={"final_m": stats.get("final_m"), "n_steps": stats.get("n_steps")},
+        extra=_extra,
     )

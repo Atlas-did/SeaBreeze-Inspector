@@ -32,6 +32,8 @@ def _build_parser() -> argparse.ArgumentParser:
     a.add_argument("--target-m", type=float, default=1.5, help="目标高度（米），默认 1.5")
     a.add_argument("--backend", choices=["sim", "omnisim", "mock"],
                    default="sim", help="执行后端；mock 不支持动态悬停")
+    a.add_argument("--model", default="mavic-2-pro",
+                   help="OmniSim 空中载机机型（随数据进 extra.model 显式标注，避免 Mavic/Tello 冒充）")
     a.add_argument("--calm", dest="wind", action="store_false", default=False,
                    help="静风理想工况（默认）")
     a.add_argument("--wind", dest="wind", action="store_true",
@@ -44,13 +46,13 @@ def _build_parser() -> argparse.ArgumentParser:
     return p
 
 
-def _build_driver(backend: str, windy: bool):
+def _build_driver(backend: str, windy: bool, model: str = "mavic-2-pro"):
     if backend == "sim":
         from backend.simulation.altitude_driver import build_sim_driver
         return build_sim_driver(calm=not windy)
     if backend == "omnisim":
         from backend.omnisim.adapter import OmniSimDriver
-        return OmniSimDriver()
+        return OmniSimDriver(model=model)
     if backend == "mock":
         raise ValueError("mock 后端无法执行动态高度保持（MockTello 无动力学）；"
                          "请用 --backend sim 得到自家仿真基准，或用 --backend omnisim。")
@@ -64,7 +66,8 @@ def main(argv=None) -> int:
         return 2
 
     try:
-        driver = _build_driver(args.backend, getattr(args, "wind", False))
+        driver = _build_driver(args.backend, getattr(args, "wind", False),
+                               getattr(args, "model", "mavic-2-pro"))
         result = run_altitude_hold(
             driver,
             target_m=args.target_m,

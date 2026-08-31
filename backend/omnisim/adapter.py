@@ -37,11 +37,19 @@ class OmniSimBridgeError(RuntimeError):
 
 
 class OmniSimDriver:
-    """实现 AltitudeHoldDriver 协议（协议见 backend.drone.commands）。"""
+    """实现 AltitudeHoldDriver 协议（协议见 backend.drone.commands）。
 
-    def __init__(self, base_url: Optional[str] = None, timeout_s: float = 90.0):
+    F02/D1 落点：本驱动当前面向 OmniSim 的 mavic_omnilink_bridge，因此机型
+    默认 "mavic-2-pro"。"谁在飞"是一个会随数据流转的标签，必须显式声明，
+    避免读者把 Mavic 的动力学数据误读成 SeaBreeze 的载机(Tello)。将来转
+    Tello bridge 时，用 --model tello 覆盖并在协议层拆出 Tello 实现即可。
+    """
+
+    def __init__(self, base_url: Optional[str] = None, timeout_s: float = 90.0,
+                 model: str = "mavic-2-pro"):
         self._base_url = (base_url or os.environ.get("OMNISIM_BASE_URL", "")).rstrip("/")
         self._timeout = timeout_s
+        self.model = model
 
     def backend_name(self) -> str:
         return "omnisim"
@@ -119,6 +127,7 @@ class OmniSimDriver:
             "final_m": float(z_trace[-1]),
             "state": modes[-1] if modes else "",
             "n_steps": n,
+            "model": self.model,
         }
 
     # ------------------------------------------------------------------
