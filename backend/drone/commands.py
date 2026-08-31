@@ -31,7 +31,11 @@ class FlightCommand:
 
     op: 操作名。瞬时指令: connect/takeoff/land/emergency/kill/hover/move_to；
         动态指令: altitude_hold。
-    params: 参数，如 {"target_m": 1.5} 或 {"x":0,"y":0,"z":100,"speed":30}。
+    params: 参数。单位约定(易混,务必注意):
+        - move_to:        {"x","y","z"} 单位均为 **厘米(cm)**,speed 为 cm/s(默认 30)。
+                          例: {"x":0,"y":0,"z":100,"speed":30} = 上升 1 m。
+        - altitude_hold:  {"target_m"} 单位 **米(m)**。例: {"target_m": 1.5}。
+        两者 z 语义差 100 倍,写统一脚本时切勿把 move_to 的 z 当米。
     note: 人可读备注（如天气/风况/实验编号），不参与执行。
     """
 

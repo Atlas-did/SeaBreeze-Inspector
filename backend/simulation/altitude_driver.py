@@ -33,6 +33,9 @@ class SimRuntimeDriver:
         return bool(accepted)
 
     def settle(self, seconds: float, dt: float = 0.02) -> Dict[str, Any]:
+        # F05 注：这里 n_steps = 物理步数（仿真时间驱动，SimRuntime.step 各步）。
+        # 与 OmniSim adapter.settle 的 n_steps = HTTP 轮询次数（墙钟驱动）语义不同，
+        # 跨后端对比时勿把两者当同一种“步数”。
         # SimRuntime.step 内部把 dt clamp 到 min(0.02, dt)（见 loop.py:108），
         # 这里必须用同一个有效步长，否则稳态窗口(5s)与 n_steps 会算错。
         sim_dt = min(0.02, dt) if dt > 0 else 0.02

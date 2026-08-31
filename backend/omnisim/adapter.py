@@ -89,6 +89,10 @@ class OmniSimDriver:
 
         与自家仿真口径一致：最后 5 秒高度均值 = altitude_m。
         mode 取最后一次轮询的 bridge 模式（hover/takeoff/goto/...）供参考。
+
+        F05 注：这里 n_steps = HTTP 轮询次数（墙钟驱动），与自家仿真
+        altitude_driver.settle 的 n_steps = 物理步数（仿真时间驱动）语义不同，
+        跨后端对比时勿把两者当同一种“步数”。
         """
         self._require_ready()
         n = max(1, int(seconds / dt))
