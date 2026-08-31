@@ -182,6 +182,20 @@ def run_altitude_hold(
 
     np.random.seed(seed)  # 保证可复现（文档约定：整次实验用同一种子）
     accepted = driver.set_target_altitude(float(target_m))
+    # F01 修复: 指令被拒(如 bridge 409 busy)时不照常 settle,否则会产出
+    # "accepted=False 与 settled=True 并存"的误导性证据(实测的其实是地面高度)。
+    if not accepted:
+        return CommandResult(
+            op="altitude_hold",
+            backend=driver.backend_name(),
+            accepted=False,
+            target_m=float(target_m),
+            settled=False,
+            sim_seconds=float(settle_s),
+            seed=seed,
+            note=note,
+            extra={"reason": "set_target_altitude rejected (e.g. bridge busy)"},
+        )
     stats = driver.settle(seconds=settle_s, dt=dt)
 
     measured = stats.get("altitude_m")

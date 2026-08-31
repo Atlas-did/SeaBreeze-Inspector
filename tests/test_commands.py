@@ -58,3 +58,18 @@ def test_instant_unsupported_op_raises():
     tello = MockTello()
     with pytest.raises(ValueError):
         execute_instant(tello, FlightCommand(op="flip"))
+
+
+def test_run_altitude_hold_rejected_driver_skips_settle():
+    """F01: set_target_altitude 被拒(False)时不调 settle, settled=False,不产出误导证据。"""
+    class RejectingDriver:
+        def backend_name(self):
+            return "rejecting"
+        def set_target_altitude(self, meters):
+            return False
+        def settle(self, seconds, dt=0.02):
+            raise AssertionError("settle must not be called when accepted=False")
+    r = run_altitude_hold(RejectingDriver(), target_m=1.5, settle_s=5.0, seed=42)
+    assert r.accepted is False
+    assert r.settled is False
+    assert r.measured_m is None and r.error_m is None
