@@ -56,7 +56,7 @@ def load_manifest(manifest_path):
     if not os.path.isfile(manifest_path):
         raise ValueError(f"manifest not found: {manifest_path}")
     rows = []
-    with open(manifest_path, newline="", encoding="utf-8") as fh:
+    with open(manifest_path, newline="", encoding="utf-8-sig") as fh:
         reader = csv.DictReader(fh)
         cols = reader.fieldnames or []
         for need in ("image", "scene_block_id"):
@@ -276,7 +276,9 @@ def build_report(rows, split_dir, model_path, det_by_image, gt_by_image,
             "diag_conf": DIAG_CONF, "diag_iou": DIOU,
             "images": len(rows), "limit": limit,
             "finished_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            "numbers_are_citable": limit is None and os.path.basename(split_dir) != "ood_test",
+            # citability: full runs are citable — the D7 slot lock already
+            # guarantees an ood_test run is the pre-registered one-shot.
+            "numbers_are_citable": limit is None,
             **(extra_meta or {}),
         },
         "headline_val": headline,

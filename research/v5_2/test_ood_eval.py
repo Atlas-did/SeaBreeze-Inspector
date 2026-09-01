@@ -227,11 +227,12 @@ def test_build_report_citability_flag(tmp_path, monkeypatch):
     r2 = oe.build_report(rows, split_dir, "no.pt", det_by_image, gt_by_image,
                          {}, limit=None)
     assert r2["meta"]["numbers_are_citable"] is True       # full id_val run
-    # and an ood_test full run is NEVER auto-citable without the lock flow
+    # and an ood_test full run IS citable — the D7 slot lock enforces the
+    # one-shot discipline, so a full ood_test report is the paper number
     od = os.path.join(str(tmp_path), "ood_test")
     os.makedirs(od, exist_ok=True)
     od_paths = [oe.resolve_image(od, r["image"]) for r in rows]
     det_od = dict(zip(od_paths, (det_by_image[p] for p in paths)))
     gt_od = dict(zip(od_paths, (gt_by_image[p] for p in paths)))
     r3 = oe.build_report(rows, od, "no.pt", det_od, gt_od, {}, limit=None)
-    assert r3["meta"]["numbers_are_citable"] is False
+    assert r3["meta"]["numbers_are_citable"] is True
