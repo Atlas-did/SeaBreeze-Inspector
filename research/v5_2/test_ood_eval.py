@@ -121,26 +121,35 @@ def test_aggregate_math():
 # ---------------------------------------------------------------- guard (D7)
 
 def test_ood_lock_refuses_second_run(tmp_path):
-    oe.write_ood_lock(str(tmp_path), "model.pt", "report.json",
+    oe.write_ood_lock(str(tmp_path), "baseline", "model.pt", "report.json",
                       {"mAP50": 0.42})
     with pytest.raises(RuntimeError, match="D7 violation"):
-        oe.check_ood_lock(str(tmp_path))
+        oe.check_ood_lock(str(tmp_path), "baseline")
+
+
+def test_ood_lock_slots_are_independent(tmp_path):
+    oe.write_ood_lock(str(tmp_path), "baseline", "model.pt", "r1.json", {})
+    # final slot untouched by a baseline run — both slots get their own shot
+    oe.check_ood_lock(str(tmp_path), "final")            # no raise
+    with pytest.raises(RuntimeError, match="slot 'baseline'"):
+        oe.check_ood_lock(str(tmp_path), "baseline")
 
 
 def test_ood_lock_payload_fields(tmp_path):
-    lp = oe.write_ood_lock(str(tmp_path), __file__, "report.json", {})
+    lp = oe.write_ood_lock(str(tmp_path), "final", __file__, "report.json", {})
     with open(lp, encoding="utf-8") as fh:
         payload = json.load(fh)
-    assert set(payload) >= {"finished_utc", "model_path", "model_sha256",
-                            "report", "headline"}
+    assert set(payload) >= {"slot", "finished_utc", "model_path",
+                            "model_sha256", "report", "headline"}
+    assert payload["slot"] == "final"
     assert payload["model_sha256"]
 
 
 def test_id_val_has_no_lock_ever(tmp_path):
     # id_val evaluation flow must not create the lock (only main() writes it,
     # and only for ood_test) — the guard itself must stay silent here.
-    assert not os.path.isfile(oe.lock_path_for(str(tmp_path)))
-    oe.check_ood_lock(str(tmp_path))  # no raise
+    assert not os.path.isfile(oe.lock_path_for(str(tmp_path), "baseline"))
+    oe.check_ood_lock(str(tmp_path), "baseline")  # no raise
 
 
 # ---------------------------------------------------------------- report

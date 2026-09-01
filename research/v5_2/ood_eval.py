@@ -6,8 +6,9 @@
   - headline metrics via Ultralytics val (comparable with v4/v5 history)
   - per-scene-block / short-side-bucket / aspect-ratio-bucket diagnostics
     (own greedy IoU matcher at a fixed operating point, documented in report)
-  - D7 enforcement: `--split ood_test` is ONE-SHOT. A lock file
-    (ood_test_EVAL_LOCK.json next to the manifest) is written after a
+  - D7 enforcement: `--split ood_test` is ONE-SHOT per pre-registered slot
+    ('baseline' = pre-data measurement, 'final' = paper number). A lock file
+    (ood_test_EVAL_LOCK_<slot>.json next to the manifest) is written after a
     successful full run and refused afterwards. `--limit` is forbidden on
     ood_test (a partial eval still burns the set). id_val is freely
     re-runnable (dry runs / threshold sweeps live there).
@@ -33,7 +34,8 @@ from collections import defaultdict
 SPLIT_DIR_DEFAULT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "v5_2")
 
 VALID_SPLITS = ("id_val", "ood_test")
-LOCK_NAME = "ood_test_EVAL_LOCK.json"
+OOD_SLOTS = ("baseline", "final")   # D7: two pre-registered one-shot slots
+LOCK_PREFIX = "ood_test_EVAL_LOCK"
 
 # bucket edges mirror make_v5_2_split.py / split_report.json so numbers line up
 SHORT_SIDE_EDGES = (32, 64, 128)          # <=32, <=64, <=128, >128
@@ -167,18 +169,18 @@ def _predict_boxes(model, image_paths, conf, imgsz):
 
 # ---------------------------------------------------------------- guard
 
-def lock_path_for(split_dir_root):
-    return os.path.join(split_dir_root, LOCK_NAME)
+def lock_path_for(split_dir_root, slot):
+    return os.path.join(split_dir_root, f"{LOCK_PREFIX}_{slot}.json")
 
 
-def check_ood_lock(split_dir_root):
-    """Raise RuntimeError if the one-shot OOD evaluation was already spent."""
-    lp = lock_path_for(split_dir_root)
+def check_ood_lock(split_dir_root, slot):
+    """Raise RuntimeError if this pre-registered OOD slot was already spent."""
+    lp = lock_path_for(split_dir_root, slot)
     if os.path.isfile(lp):
         with open(lp, encoding="utf-8") as fh:
             prev = json.load(fh)
         raise RuntimeError(
-            "D7 violation: ood_test was already evaluated on "
+            f"D7 violation: ood_test slot '{slot}' was already evaluated on "
             f"{prev.get('finished_utc')} with model sha256 "
             f"{str(prev.get('model_sha256') or '?')[:12]}… "
             f"(report: {prev.get('report')}). The OOD test is final and must not be "
@@ -186,9 +188,10 @@ def check_ood_lock(split_dir_root):
             "delete the lock file by hand after that decision.")
 
 
-def write_ood_lock(split_dir_root, model_path, report_path, headline):
-    lp = lock_path_for(split_dir_root)
+def write_ood_lock(split_dir_root, slot, model_path, report_path, headline):
+    lp = lock_path_for(split_dir_root, slot)
     payload = {
+        "slot": slot,
         "finished_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "model_path": os.path.abspath(model_path),
         "model_sha256": (_sha256_file(model_path)
@@ -345,6 +348,10 @@ def main(argv=None):
                     help="defaults to research/v5_2/report_<split>_<stamp>.json")
     ap.add_argument("--limit", type=int, default=None,
                     help="dry-run size; FORBIDDEN on ood_test")
+    ap.add_argument("--slot", choices=OOD_SLOTS, default=None,
+                    help="required for ood_test: 'baseline' (pre-registered "
+                         "pre-data measurement) or 'final' (paper number); "
+                         "each slot is one-shot")
     ap.add_argument("--imgsz", type=int, default=1024)
     args = ap.parse_args(argv)
 
@@ -353,9 +360,12 @@ def main(argv=None):
     manifest = args.manifest or os.path.join(split_dir_root, f"{args.split}_manifest.csv")
 
     if args.split == "ood_test":
+        if not args.slot:
+            ap.error("D7: ood_test requires an explicit --slot "
+                     f"{'|'.join(OOD_SLOTS)} (each pre-registered slot is one-shot)")
         if args.limit is not None:
             ap.error("D7: --limit is forbidden on ood_test (partial eval burns the set)")
-        check_ood_lock(split_dir_root)
+        check_ood_lock(split_dir_root, args.slot)
 
     rows = load_manifest(manifest)
     if args.limit:
@@ -392,9 +402,9 @@ def main(argv=None):
     print(f"[ood_eval] report -> {out}")
 
     if args.split == "ood_test":
-        lp = write_ood_lock(split_dir_root, args.model, out,
+        lp = write_ood_lock(split_dir_root, args.slot, args.model, out,
                             report["headline_val"])
-        print(f"[ood_eval] one-shot lock written -> {lp}")
+        print(f"[ood_eval] one-shot lock ({args.slot}) written -> {lp}")
     return 0
 
 
