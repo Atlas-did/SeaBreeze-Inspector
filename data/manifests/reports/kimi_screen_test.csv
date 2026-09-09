@@ -1,0 +1,13 @@
+image,verdict,reason
+DJI_0784,defect,有缺陷 理由: 叶片表面有明显的污渍和涂层脱落。
+DJI_0391,defect,有缺陷 理由: 叶片上有明显污渍。
+DJI_0762,defect,无缺陷 理由: 图中风机叶片表面无明显裂纹、腐蚀或涂层脱落等缺陷。
+DJI_0964,error,HTTP Error 429: Too Many Requests
+DJI_0404,error,HTTP Error 429: Too Many Requests
+DJI_0218,error,HTTP Error 429: Too Many Requests
+DJI_0341,error,HTTP Error 429: Too Many Requests
+DJI_0989,error,HTTP Error 429: Too Many Requests
+DJI_0590,error,HTTP Error 429: Too Many Requests
+DJI_0584,error,HTTP Error 429: Too Many Requests
+DJI_0400,error,HTTP Error 429: Too Many Requests
+DJI_0972,error,HTTP Error 429: Too Many Requests

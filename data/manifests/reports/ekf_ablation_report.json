@@ -1,0 +1,20 @@
+{
+  "conservative": {
+    "step_rmse": 0.7976338963298883,
+    "innovation_std": 0.299865077212671,
+    "innovation_mean": 0.001986464857333753
+  },
+  "moderate": {
+    "step_rmse": 0.7991910211495202,
+    "innovation_std": 0.31714020020066214,
+    "innovation_mean": 0.001838236046130772
+  },
+  "aggressive": {
+    "step_rmse": 0.799677770384659,
+    "innovation_std": 0.32225743324410816,
+    "innovation_mean": 0.0018074273349282899
+  },
+  "static_baseline": {
+    "d_hat_std": 0.10896336847577667
+  }
+}
