@@ -2,7 +2,7 @@ name: Test Suite
 
 on:
   push:
-    branches: [main, master, dev]
+    branches: [main, master, dev, w1]
   pull_request:
     branches: [main, master]
   workflow_dispatch:
