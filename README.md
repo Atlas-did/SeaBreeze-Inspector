@@ -14,7 +14,8 @@ This project proposes an intelligent inspection solution combining a UAV with a 
 - **Disturbance Observer (12-state EKF)** — estimates and compensates for wind disturbances
 - **Feedforward PID Controller** — disturbance-aware position control
 - **RRT\* Path Planning** — 3D obstacle-aware trajectory generation
-- **YOLOv8-Nano Defect Detection** — real-time crack/corrosion/damage detection
+- **Defect Detection (YOLO family)** — binary defect/clean detector on 1024px tiles;
+  weights in `data/weights/` were trained with YOLO11s (see *Detection status* below)
 
 ## Tech Stack
 
@@ -23,10 +24,27 @@ This project proposes an intelligent inspection solution combining a UAV with a 
 | UAV Platform | DJI Tello (via [DJITelloPy](https://github.com/damiafuentes/DJITelloPy)) |
 | Robotic Arm | 3-DOF SG90 servos + 3D-printed structure |
 | MCU | Arduino Nano (CH340) + PCA9685 servo driver |
-| Algorithms | 12D-EKF, PID+Feedforward, RRT\*, YOLOv8-Nano |
+| Algorithms | 12D-EKF, PID+Feedforward, RRT\*, YOLO11s detector |
 | Simulation | Pygame + Three.js 3D visualization |
 | Frontend | Tkinter dashboard (monitor-only) + Web 3D (main demo) |
 | Language | Python 3.10+ |
+
+## Detection status
+
+The detection pipeline is under active re-evaluation; **do not cite a mAP
+number from this repository or its docs** without checking
+[`docs/research/`](docs/research/README.md) first. Summary:
+
+- The model that produced the current `data/weights/` artifacts is **YOLO11s**
+  (binary nc=1, 1024px tiles). `backend/vision/train.py` / `detect.py` still
+  default to `yolov8n.pt` as a fallback path — swap in the trained weights
+  explicitly.
+- Earlier figures (~0.577 mAP@0.5, 3-class, "YOLOv8-Nano") came from a v3 run
+  later found to have **83% validation/training overlap** and are invalid.
+- Current best (v4) is provisional: adjacent-parent frames cross splits, so it
+  measures same-scene generalization; a scene-isolated v5 failed (OOD), v5.1
+  improved but is not yet usable. The next step is a frozen v5.2 dual-protocol
+  evaluation (in-distribution validation + out-of-distribution test).
 
 ## Quick Start
 
