@@ -66,6 +66,8 @@ jobs:
       - name: Run dependency check
         env:
           SDL_VIDEODRIVER: dummy
+          PYTHONIOENCODING: utf-8
+          PYTHONUTF8: 1
         run: python scripts/check_deps.py --ci
 
       - name: Run tests (Ubuntu with xvfb)
