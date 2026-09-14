@@ -1,0 +1,302 @@
+#OMNISIM R2025a utf8
+
+WorldInfo {
+  title "SeaBreeze Tello (offline)"
+  basicTimeStep 8
+}
+Viewpoint {
+  orientation -0.10292035641762723 -0.0815696472829418 0.991339393385033 4.520116270436205
+  position 4.65776494205899 9.808784539042012 2.109463974095917
+  exposure 1.4
+}
+DirectionalLight {
+  direction 0.5 -0.5 -1
+}
+Solid {
+  translation 0 0 -0.03
+  children [
+    Shape {
+      appearance PBRAppearance {
+        baseColor 0.3 0.32 0.34
+        roughness 0.95
+        metalness 0
+      }
+      geometry Box {
+        size 8 8 0.06
+      }
+    }
+  ]
+  name "ground"
+  boundingObject Box {
+    size 8 8 0.06
+  }
+}
+Robot {
+  translation -0.14267660677433014 1.0558611052147171e-07 0.0009447589400224388
+  children [
+    Shape {
+      appearance PBRAppearance {
+        baseColor 0.91 0.91 0.91
+        roughness 0.5
+        metalness 0
+      }
+      geometry Box {
+        size 0.098 0.0925 0.041
+      }
+    }
+    Pose {
+      translation 0 0 0.0245
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.4 0.4 0.4
+            roughness 0.5
+            metalness 0
+          }
+          geometry Box {
+            size 0.07 0.07 0.008
+          }
+        }
+      ]
+    }
+    Pose {
+      translation 0 0 -0.022
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.05 0.05 0.05
+            roughness 0.5
+            metalness 0
+          }
+          geometry Cylinder {
+            height 0.003
+            radius 0.009
+          }
+        }
+      ]
+    }
+    Pose {
+      translation 0 -0.048 0.002
+      children [
+        Shape {
+          appearance PBRAppearance {
+            baseColor 0.05 0.05 0.05
+            roughness 0.5
+            metalness 0
+          }
+          geometry Box {
+            size 0.012 0.004 0.01
+          }
+        }
+      ]
+    }
+    HingeJoint {
+      jointParameters HingeJointParameters {
+        position 3924080.5
+        axis 0 0 1
+        anchor 0.06 0.06 0.02
+      }
+      device [
+        RotationalMotor {
+          name "front left propeller_motor"
+          maxVelocity 2000
+        }
+        PositionSensor {
+          name "front left propeller_sensor"
+        }
+      ]
+      endPoint Solid {
+        translation 0.06 0.06 0.02
+        rotation 0 0 1 5.080995289780052
+        children [
+          Pose {
+            translation 0 0 0.001
+            children [
+              Shape {
+                appearance PBRAppearance {
+                  baseColor 0.6 0.6 0.6
+                  roughness 0.5
+                  metalness 0
+                }
+                geometry Cylinder {
+                  height 0.002
+                  radius 0.038
+                }
+              }
+            ]
+          }
+        ]
+        name "front_left_propeller_link"
+        boundingObject Sphere {
+          radius 0.01
+        }
+        physics Physics {
+          density -1
+          mass 0.001
+        }
+        linearVelocity -1.4335033711176948e-06 -1.8002916934989344e-09 4.10177699450287e-06
+        angularVelocity -0.028293700888752937 -6.765338912373409e-05 76.45465850830078
+      }
+    }
+    HingeJoint {
+      jointParameters HingeJointParameters {
+        position -3924081.75
+        axis 0 0 1
+        anchor 0.06 -0.06 0.02
+      }
+      device [
+        RotationalMotor {
+          name "front right propeller_motor"
+          maxVelocity 2000
+        }
+        PositionSensor {
+          name "front right propeller_sensor"
+        }
+      ]
+      endPoint Solid {
+        translation 0.06 -0.06 0.02
+        rotation 0 0 1 6.235375324579122
+        children [
+          Pose {
+            translation 0 0 0.001
+            children [
+              Shape {
+                appearance PBRAppearance {
+                  baseColor 0.6 0.6 0.6
+                  roughness 0.5
+                  metalness 0
+                }
+                geometry Cylinder {
+                  height 0.002
+                  radius 0.038
+                }
+              }
+            ]
+          }
+        ]
+        name "front_right_propeller_link"
+        boundingObject Sphere {
+          radius 0.01
+        }
+        physics Physics {
+          density -1
+          mass 0.001
+        }
+        linearVelocity -1.4372586747413152e-06 -1.8002912494097245e-09 4.1022171899385285e-06
+        angularVelocity 0.028293689712882042 -6.915804260643199e-05 -76.45465087890625
+      }
+    }
+    HingeJoint {
+      jointParameters HingeJointParameters {
+        position -3924086.5
+        axis 0 0 1
+        anchor -0.06 0.06 0.02
+      }
+      device [
+        RotationalMotor {
+          name "rear left propeller_motor"
+          maxVelocity 2000
+        }
+        PositionSensor {
+          name "rear left propeller_sensor"
+        }
+      ]
+      endPoint Solid {
+        translation -0.06 0.06 0.02
+        rotation 0 0 1 1.485375324579121
+        children [
+          Pose {
+            translation 0 0 0.001
+            children [
+              Shape {
+                appearance PBRAppearance {
+                  baseColor 0.6 0.6 0.6
+                  roughness 0.5
+                  metalness 0
+                }
+                geometry Cylinder {
+                  height 0.002
+                  radius 0.038
+                }
+              }
+            ]
+          }
+        ]
+        name "rear_left_propeller_link"
+        boundingObject Sphere {
+          radius 0.01
+        }
+        physics Physics {
+          density -1
+          mass 0.001
+        }
+        linearVelocity -1.4304655451269355e-06 1.954903128265073e-09 -4.106908818357624e-06
+        angularVelocity 0.028293687850236893 -6.915804260643199e-05 -76.45464324951172
+      }
+    }
+    HingeJoint {
+      jointParameters HingeJointParameters {
+        position 3924086
+        axis 0 0 1
+        anchor -0.06 -0.06 0.02
+      }
+      device [
+        RotationalMotor {
+          name "rear right propeller_motor"
+          maxVelocity 2000
+        }
+        PositionSensor {
+          name "rear right propeller_sensor"
+        }
+      ]
+      endPoint Solid {
+        translation -0.06 -0.06 0.02
+        rotation 0 0 -0.9999999999999999 1.985375324579121
+        children [
+          Pose {
+            translation 0 0 0.001
+            children [
+              Shape {
+                appearance PBRAppearance {
+                  baseColor 0.6 0.6 0.6
+                  roughness 0.5
+                  metalness 0
+                }
+                geometry Cylinder {
+                  height 0.002
+                  radius 0.038
+                }
+              }
+            ]
+          }
+        ]
+        name "rear_right_propeller_link"
+        boundingObject Sphere {
+          radius 0.01
+        }
+        physics Physics {
+          density -1
+          mass 0.001
+        }
+        linearVelocity -1.4342208487505559e-06 1.954903572354283e-09 -4.106468622921966e-06
+        angularVelocity -0.02829369716346264 -6.765338912373409e-05 76.45465087890625
+      }
+    }
+  ]
+  name "SeaBreeze Tello Wind"
+  boundingObject Box {
+    size 0.098 0.0925 0.041
+  }
+  physics Physics {
+    density -1
+    mass 0.087
+  }
+  controller "seabreeze_tello_wind_bridge"
+  controllerArgs [
+    "--port"
+    "6091"
+  ]
+  supervisor TRUE
+  linearVelocity -6.57478054222338e-08 3.539333322949423e-12 -1.8393172540598357e-09
+  angularVelocity -3.676746462843994e-09 -6.840571586508304e-05 -3.12946504266165e-08
+}
