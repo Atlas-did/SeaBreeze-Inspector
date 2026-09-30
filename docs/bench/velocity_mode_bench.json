@@ -1,0 +1,132 @@
+{
+  "protocol_version": 1,
+  "dt_s": 0.02,
+  "hover_target_note": "每个用例的 hover_target_cm_actual 是起飞后读到的真实悬停高度; HOVER_TARGET_CM 只是参考常量, 不参与指标计算",
+  "hover_target_cm_reference": 100.0,
+  "waypoint_cm": [
+    0.0,
+    100.0
+  ],
+  "reach_radius_cm": 30.0,
+  "frames": {
+    "P1": 1000,
+    "P2": 750,
+    "P3": 750
+  },
+  "seed": 0,
+  "cases": [
+    {
+      "mode": "legacy",
+      "wind_mps": 0.0,
+      "hover_frames": 70,
+      "hover_target_cm_actual": 120.0,
+      "P1_hover_hold": {
+        "alt_err_mean_cm": 7.939372573133596e-07,
+        "alt_err_max_cm": 1.8483599689034236e-05,
+        "xy_err_mean_cm": 0.0,
+        "xy_err_max_cm": 0.0,
+        "final_xy_err_cm": 0.0,
+        "final_alt_err_cm": 4.263256414560601e-14
+      },
+      "P2_waypoint": {
+        "reach_frames": 47,
+        "reach_time_s": 0.9400000000000001,
+        "ss_err_mean_cm": 4.3263295424367245e-08,
+        "ss_err_max_cm": 1.1001497597362686e-06,
+        "min_err_cm": 0.0
+      },
+      "P3_return_home": {
+        "reach_frames": 47,
+        "reach_time_s": 0.9400000000000001,
+        "ss_err_mean_cm": 4.32632888259107e-08,
+        "ss_err_max_cm": 1.1001497290301983e-06,
+        "min_err_cm": 1.4264593094851546e-16
+      }
+    },
+    {
+      "mode": "legacy",
+      "wind_mps": 2.0,
+      "hover_frames": 78,
+      "hover_target_cm_actual": 120.0,
+      "P1_hover_hold": {
+        "alt_err_mean_cm": 6.743872895880446,
+        "alt_err_max_cm": 7.06066696904729,
+        "xy_err_mean_cm": 44434.15882503023,
+        "xy_err_max_cm": 73527.75313741363,
+        "final_xy_err_cm": 73527.75313741363,
+        "final_alt_err_cm": 6.436557093570386
+      },
+      "P2_waypoint": {
+        "reach_frames": null,
+        "reach_time_s": null,
+        "ss_err_mean_cm": 106386.25010521173,
+        "ss_err_max_cm": 117320.41103737488,
+        "min_err_cm": 73587.27673854983
+      },
+      "P3_return_home": {
+        "reach_frames": null,
+        "reach_time_s": null,
+        "ss_err_mean_cm": 150120.57661034536,
+        "ss_err_max_cm": 160994.5867216003,
+        "min_err_cm": 117377.60903880058
+      }
+    },
+    {
+      "mode": "velocity",
+      "wind_mps": 0.0,
+      "hover_frames": 55,
+      "hover_target_cm_actual": 120.0,
+      "P1_hover_hold": {
+        "alt_err_mean_cm": 2.284418138033223,
+        "alt_err_max_cm": 5.89489075759505,
+        "xy_err_mean_cm": 0.0,
+        "xy_err_max_cm": 0.0,
+        "final_xy_err_cm": 0.0,
+        "final_alt_err_cm": 2.2236237935037337
+      },
+      "P2_waypoint": {
+        "reach_frames": 82,
+        "reach_time_s": 1.6400000000000001,
+        "ss_err_mean_cm": 1.0776740667224975,
+        "ss_err_max_cm": 3.4101103476311607,
+        "min_err_cm": 0.0029973985322158114
+      },
+      "P3_return_home": {
+        "reach_frames": 84,
+        "reach_time_s": 1.68,
+        "ss_err_mean_cm": 1.2525890602671712,
+        "ss_err_max_cm": 3.590190132887975,
+        "min_err_cm": 0.00644816092996805
+      }
+    },
+    {
+      "mode": "velocity",
+      "wind_mps": 2.0,
+      "hover_frames": 55,
+      "hover_target_cm_actual": 120.0,
+      "P1_hover_hold": {
+        "alt_err_mean_cm": 0.43507883054342666,
+        "alt_err_max_cm": 1.2125416959821393,
+        "xy_err_mean_cm": 4.419503365403344,
+        "xy_err_max_cm": 5.131563394281007,
+        "final_xy_err_cm": 4.381050896685545,
+        "final_alt_err_cm": 0.003204790971579996
+      },
+      "P2_waypoint": {
+        "reach_frames": 84,
+        "reach_time_s": 1.68,
+        "ss_err_mean_cm": 4.540156401508711,
+        "ss_err_max_cm": 5.272020965184269,
+        "min_err_cm": 3.8558329774490123
+      },
+      "P3_return_home": {
+        "reach_frames": 85,
+        "reach_time_s": 1.7,
+        "ss_err_mean_cm": 4.499557512159698,
+        "ss_err_max_cm": 5.132562043783136,
+        "min_err_cm": 3.896403755434088
+      }
+    }
+  ],
+  "honesty_note": "legacy 与 velocity 是不同实验协议; 指标用于对比与回归, 不能当作真机性能证明(真机需拆桨/系留/SITL, 见 docs/HIL_PROTOCOL.md)"
+}

@@ -6,7 +6,6 @@ Tello Mock 测试 — 不依赖真实硬件，离线测试无人机控制逻辑
 import sys
 from pathlib import Path
 
-import numpy as np
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -114,7 +113,7 @@ def test_battery_low():
     assert tello.get_battery() == 10
 
     # 低电量时应拒绝高耗能操作
-    print(f"  [OK] 低电量(10%)检测正常")
+    print("  [OK] 低电量(10%)检测正常")
 
     # 强制紧急降落
     tello._battery = 5

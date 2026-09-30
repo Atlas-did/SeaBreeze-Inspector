@@ -102,8 +102,9 @@ def test_emergency_interrupt():
     mc.drone.connect()
     mc.drone.takeoff()
 
-    # 触发电量紧急
-    mc._battery = 5
+    # 触发电量紧急 (P1-1: 阈值现在来自 config 的 safety.tiers.*,
+    # 取配置值 -1 而非魔数 5, 避免与边界值重合)
+    mc._battery = int(mc.safety_guard.THRESHOLDS["battery_kill"]) - 1
     triggered = mc._check_safety()
     assert triggered is True
     assert mc.state == "EMERGENCY"

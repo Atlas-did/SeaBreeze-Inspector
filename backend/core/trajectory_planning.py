@@ -86,7 +86,8 @@ class RRTStarPlanner:
 
         # 默认碰撞检测
         if is_collision is None:
-            is_collision = lambda pos: self._default_collision(pos, obstacles)
+            def is_collision(pos):
+                return self._default_collision(pos, obstacles)
 
         # 初始化树
         self.nodes = [start.copy()]
@@ -151,7 +152,7 @@ class RRTStarPlanner:
         if goal_idx < 0:
             # 没找到精确解, 找最近的
             goal_idx = self._nearest(goal)
-            print(f"[WARN] RRT* 未精确到达目标, 返回最近节点 (距离={np.linalg.norm(self.nodes[goal_idx]-goal):.1f}cm)")
+            print(f"[WARN] RRT* 未精确到达目标, 返回最近节点 (距离={np.linalg.norm(self.nodes[goal_idx] - goal):.1f}cm)")
 
         # 回溯路径
         path = self._backtrack(goal_idx)
@@ -252,7 +253,7 @@ class RRTStarPlanner:
         # 简单平滑: 取中点。平滑不得引入碰撞 — 若平滑点越界, 保留原始点(已知无碰撞)
         smoothed = [path[0]]
         for i in range(1, len(path) - 1):
-            pt = 0.25 * path[i-1] + 0.5 * path[i] + 0.25 * path[i+1]
+            pt = 0.25 * path[i - 1] + 0.5 * path[i] + 0.25 * path[i + 1]
             if is_collision(pt):
                 pt = path[i]
             smoothed.append(pt)

@@ -12,7 +12,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from backend.arm.arm_kinematics import FK, IK, Jacobian
-from backend.arm.arm_kinematics import L1, L2, L3, THETA1_MIN, THETA1_MAX, THETA2_MIN, THETA2_MAX, THETA3_MIN, THETA3_MAX
+from backend.arm.arm_kinematics import THETA1_MIN, THETA1_MAX, THETA2_MIN, THETA2_MAX, THETA3_MIN, THETA3_MAX
 
 
 def test_fk_ik_roundtrip():

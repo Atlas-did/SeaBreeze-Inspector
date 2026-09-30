@@ -28,9 +28,9 @@ _PROJ_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__f
 if _PROJ_ROOT not in sys.path:
     sys.path.insert(0, _PROJ_ROOT)
 
-from backend.simulation.models import Quadrotor3D, WindDisturbance, RobotArm3DOF, VirtualSensor
-from backend.main import MissionController
-from backend.runtime.loop import SimRuntime
+from backend.simulation.models import Quadrotor3D, WindDisturbance, RobotArm3DOF, VirtualSensor  # noqa: E402
+from backend.main import MissionController  # noqa: E402
+from backend.runtime.loop import SimRuntime  # noqa: E402
 
 # ---- 日志配置 (模块级, 无副作用: 仅配置 logger, 不创建文件) ----
 _LOG_DIR = os.path.join(_PROJ_ROOT, "logs")

@@ -1,0 +1,102 @@
+name: Code CI (no model weights required)
+
+# 审计 Phase 2: 拆成两条流水线。
+#   code-ci            —— 不依赖真实权重: 依赖检查(--no-weights) + 环境协议校验
+#                          (verify_environment.py) + 单元/仿真/HIL 测试 +
+#                          冒烟 + 静态检查。**干净克隆必须能过**。
+#   model-release-ci   —— 从受控仓库按 SHA256 拉权重, 再验模型加载/推理与部署配置。
+# 背景: 权重被 .gitignore 排除(*.pt), 此前 CI 依赖 `.ci-placeholder.pt` 才"过",
+# 属于假通过; 收紧后又变成干净克隆整体失败。因此必须按"是否需要权重"分流。
+
+on:
+  push:
+    branches: [main, master, dev, w1]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  code-check:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ['3.11', '3.12']
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install system deps (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libsdl2-2.0-0 libsdl2-dev
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: pip-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('requirements.txt') }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
+
+      - name: Environment protocol check (declared protocol only)
+        # 协议级校验(审计第 7 条): 只认 Python 主次版本范围 + requirements 内容指纹,
+        # 显式忽略本机绝对路径(python_executable)、平台串与补丁号, 因此
+        # ubuntu + Python 3.11/3.12 的干净克隆必须通过(无 environment.lock 也能跑)。
+        # 本流水线**不跑**需要数据/权重的校验。
+        env:
+          PYTHONIOENCODING: utf-8
+          PYTHONUTF8: 1
+        run: python scripts/verify_environment.py
+
+      - name: Dependency check (code-only)
+        env:
+          SDL_VIDEODRIVER: dummy
+          PYTHONIOENCODING: utf-8
+          PYTHONUTF8: 1
+        run: python scripts/check_deps.py --ci --no-weights
+
+      - name: Tests (Ubuntu, xvfb)
+        if: runner.os == 'Linux'
+        env:
+          SDL_VIDEODRIVER: dummy
+          PYTHONIOENCODING: utf-8
+          PYTHONUTF8: 1
+        run: xvfb-run -a python -m pytest tests/ -v --tb=short
+
+      - name: Tests (Windows headless)
+        if: runner.os == 'Windows'
+        env:
+          SDL_VIDEODRIVER: dummy
+          PYTHONIOENCODING: utf-8
+          PYTHONUTF8: 1
+        run: python -m pytest tests/ -v --tb=short
+
+      - name: Sim headless smoke test
+        env:
+          SDL_VIDEODRIVER: dummy
+          PYTHONIOENCODING: utf-8
+          PYTHONUTF8: 1
+        run: python scripts/smoke_test_sim.py --frames 10
+
+      - name: Lint (flake8, blocking)
+        # 审计 Phase 2 收尾: 历史 lint 债已从 **248 处清零**（backend/、scripts/、tests/ 均为 0），
+        # 因此去掉 --exit-zero —— lint 现在会**真正阻断合入**。
+        # 旧注释里写的"约 27 处"是错的（实测 248），已一并更正。
+        # tests/ 额外忽略 E402: 测试必须先 sys.path.insert 再 import backend.*，属设计如此。
+        if: runner.os == 'Linux'
+        run: |
+          python -m flake8 backend/ --count --max-line-length=120 --extend-ignore=E501,W503
+          python -m flake8 scripts/ --count --max-line-length=120 --extend-ignore=E501,W503
+          python -m flake8 tests/ --count --max-line-length=120 --extend-ignore=E501,W503,E402

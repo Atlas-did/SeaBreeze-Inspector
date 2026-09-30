@@ -169,6 +169,7 @@ def test_settle_raises_when_z_never_present(monkeypatch):
     """
     driver = OmniSimDriver(base_url="http://127.0.0.1:1")
     calls = {"n": 0}
+
     def fake_state():
         calls["n"] += 1
         return {"mode": "hover"}  # 无 "z" 键

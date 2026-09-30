@@ -30,7 +30,6 @@ Arduino Nano CH340 一键烧入脚本
 from __future__ import annotations
 
 import argparse
-import os
 import platform
 import shutil
 import subprocess
@@ -243,9 +242,9 @@ def find_arduino_cli() -> Path | None:
 
 def print_cli_install_guide() -> None:
     """输出arduino-cli安装指引"""
-    print(f"\n{Color.YELLOW}{'='*60}{Color.RESET}")
+    print(f"\n{Color.YELLOW}{'=' * 60}{Color.RESET}")
     print(f"{Color.BOLD}arduino-cli 未安装 — 安装指引{Color.RESET}")
-    print(f"{Color.YELLOW}{'='*60}{Color.RESET}")
+    print(f"{Color.YELLOW}{'=' * 60}{Color.RESET}")
 
     if SYSTEM == "Windows":
         print("""
@@ -300,7 +299,7 @@ def print_cli_install_guide() -> None:
 或者使用备用方案 — Arduino IDE 手动烧入:
   详见 docs/FLASH_GUIDE.md 的"备用方案"章节
 """)
-    print(f"{Color.YELLOW}{'='*60}{Color.RESET}\n")
+    print(f"{Color.YELLOW}{'=' * 60}{Color.RESET}\n")
 
 
 # =============================================================================
@@ -584,7 +583,7 @@ def verify_upload(port: str) -> bool:
     if VERIFY_EXPECTED in response:
         ok("验证通过! 固件运行正常")
         # 提取角度信息
-        lines = [l for l in response.split("\n") if VERIFY_EXPECTED in l]
+        lines = [line for line in response.split("\n") if VERIFY_EXPECTED in line]
         if lines:
             ok(f"当前角度: {lines[-1].strip()}")
         return True
@@ -672,10 +671,10 @@ def main() -> int:
 
     # 打印Banner
     print(f"""
-{Color.BOLD}{'='*60}{Color.RESET}
+{Color.BOLD}{'=' * 60}{Color.RESET}
 {Color.BOLD}  Arduino Nano CH340 — 一键烧入工具{Color.RESET}
 {Color.BOLD}  主方案: arduino-cli  |  备用: Arduino IDE{Color.RESET}
-{Color.BOLD}{'='*60}{Color.RESET}
+{Color.BOLD}{'=' * 60}{Color.RESET}
 """)
 
     # 根据Bootloader类型选择FQBN
@@ -694,7 +693,7 @@ def main() -> int:
     port = detect_port(args.port)
     if not port:
         error("未找到可用串口, 烧入中止")
-        print(f"\n提示: 用 --port 参数手动指定, 如 --port COM3")
+        print("\n提示: 用 --port 参数手动指定, 如 --port COM3")
         return 1
 
     # =====================================================================
@@ -763,9 +762,9 @@ def main() -> int:
     # =====================================================================
     # 完成
     # =====================================================================
-    print(f"\n{Color.GREEN}{'='*60}{Color.RESET}")
+    print(f"\n{Color.GREEN}{'=' * 60}{Color.RESET}")
     print(f"{Color.GREEN}{Color.BOLD}  烧入完成!{Color.RESET}")
-    print(f"{Color.GREEN}{'='*60}{Color.RESET}")
+    print(f"{Color.GREEN}{'=' * 60}{Color.RESET}")
     print(f"""
   串口: {port}
   Bootloader: {'旧(57600)' if 'old' in fqbn else '新(115200)'}

@@ -11,7 +11,6 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-import numpy as np
 
 from backend.drone.commands import run_altitude_hold
 from backend.simulation.altitude_driver import build_sim_driver

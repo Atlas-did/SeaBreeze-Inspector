@@ -6,30 +6,24 @@ Pygame仿真主循环 — 增强版: 3栏布局 + EKF/Controller/SafetyGuard集�
 """
 
 
-
 import os
-
-import sys
-
 
 
 os.environ["SDL_IME_SHOW_UI"] = "0"
 
 
+import numpy as np  # noqa: E402
 
-import numpy as np
-
-import pygame
-
+import pygame  # noqa: E402
 
 
-from backend.simulation.models import (
+from backend.simulation.models import (  # noqa: E402
 
     Quadrotor3D, VirtualSensor, WindDisturbance, RobotArm3DOF, WindTurbine,
 
 )
 
-from backend.simulation.renderer import (
+from backend.simulation.renderer import (  # noqa: E402
 
     draw_arm_panel,
 
@@ -41,16 +35,11 @@ from backend.simulation.renderer import (
 
 )
 
-from backend.main import MissionController
+from backend.main import MissionController  # noqa: E402
 
-from backend.utils.units import (m_to_cm, cm_to_m, mps_to_cmps, cmps_to_mps,
+from backend.utils.units import (m_to_cm, mps_to_cmps, cmps_to_mps)  # noqa: E402
 
-                                  mps2_to_cmps2)
-
-from backend.utils.config import ConfigLoader, ConfigError
-
-
-
+from backend.utils.config import ConfigLoader, ConfigError  # noqa: E402
 
 
 class Simulation:
@@ -65,15 +54,11 @@ class Simulation:
 
     """
 
-
-
     PANEL_W = 250      # 左侧遥测面板宽度
 
     CAMERA_W = 320     # 右侧摄像机窗口宽度
 
     CAMERA_H = 240
-
-
 
     def __init__(self, width=1200, height=700, fps=30, headless=False):
 
@@ -94,8 +79,6 @@ class Simulation:
 
             pass
 
-
-
         if self.headless:
             # 创建 off-screen surface 而非实际窗口 (避免 CI/headless 崩溃)
             self.screen = pygame.Surface((width, height))
@@ -111,8 +94,6 @@ class Simulation:
 
         self.height = height
 
-
-
         # 字体
 
         try:
@@ -127,13 +108,9 @@ class Simulation:
 
             self.font_sm = pygame.font.Font(None, 14)
 
-
-
         # 渲染器
 
         self.renderer = Renderer(screen_width=width, screen_height=height)
-
-
 
         # ---- 从配置加载仿真参数 ----
 
@@ -161,13 +138,9 @@ class Simulation:
 
             n = {"accel_noise_std": 0.05, "optical_flow_noise_std": 2.0, "barometer_noise_std": 10.0}
 
-
-
         self._battery_hover_drain = float(b["hover_drain"])
 
         self._battery_idle_drain = float(b["idle_drain"])
-
-
 
         # ---- 仿真对象 ----
 
@@ -213,8 +186,6 @@ class Simulation:
 
         )
 
-
-
         # ---- FSM统一: 委托给MissionController (不再复制EKF/Controller/SafetyGuard) ----
 
         self.mc = MissionController(mode="simulation", mock=True)
@@ -227,8 +198,6 @@ class Simulation:
         # A5修复: 旧键 "timeout" 不存在于 FailsafeMonitor.THRESHOLDS
         # (真实键为 timeout_land/timeout_kill), A1 修复后 heartbeat 每帧调用, 无需放宽
 
-
-
         # ---- 状态 (读取自 MissionController) ----
 
         self.running = True
@@ -239,21 +208,15 @@ class Simulation:
 
         self._last_control = np.zeros(3)
 
-
-
         # 路径
 
         self.path = None
 
         self.path_idx = -1
 
-
-
         # 叶片动画
 
         self._blade_angle = 0.0
-
-
 
         # 按键
 
@@ -265,15 +228,11 @@ class Simulation:
 
         self._sim_time = 0.0
 
-
-
         # 检测模拟
 
         self._mock_detections = []
 
         self._last_detection_time = 0.0  # #13: 时间触发检测更新
-
-
 
     # =========================================================================
 
@@ -364,15 +323,11 @@ class Simulation:
 
         print("[SIM] 仿真结束")
 
-
-
     # =========================================================================
 
     # 事件
 
     # =========================================================================
-
-
 
     def _handle_events(self):
 
@@ -390,8 +345,6 @@ class Simulation:
                     self._handle_arm_keys(event)
 
                     continue
-
-                name = pygame.key.name(event.key)
 
                 sc = getattr(event, "scancode", 0)
 
@@ -412,8 +365,6 @@ class Simulation:
                 if hasattr(event, "scancode") and event.scancode:
 
                     self._scan_held.discard(event.scancode)
-
-
 
     def _on_key_down(self, event):
 
@@ -443,8 +394,6 @@ class Simulation:
 
             self._do_reset()
 
-
-
     def _do_takeoff(self):
 
         self.mc.takeoff(height=self.hover_height * 100)  # m→cm for MissionController
@@ -458,8 +407,6 @@ class Simulation:
         self._target_pos = self.quad.get_position().copy()
 
         print("  [SIM] Took off to {:.0f}m".format(self.hover_height))
-
-
 
     def _do_land(self):
 
@@ -479,10 +426,7 @@ class Simulation:
 
         print("  [SIM] Landed")
 
-
-
     def _handle_arm_keys(self, event):
-
         """机械臂手动控制 — 方向键+Shift, [/] 控制肘关节"""
 
         delta = 5 if event.mod & pygame.KMOD_SHIFT else 1
@@ -512,8 +456,6 @@ class Simulation:
             self.arm.angles[2] = min(135, self.arm.angles[2] + delta)
 
         self.arm.set_angles(self.arm.angles)
-
-
 
     def _do_reset(self):
 
@@ -545,8 +487,6 @@ class Simulation:
 
     # =========================================================================
 
-
-
     def _update_target_from_keys(self):
 
         if self.mc.state != "HOVERING":
@@ -559,17 +499,23 @@ class Simulation:
 
         vstep = 0.03
 
-        if self._is_held(pygame.K_w, 17):   tgt[1] += step
+        if self._is_held(pygame.K_w, 17):
+            tgt[1] += step
 
-        if self._is_held(pygame.K_s, 31):   tgt[1] -= step
+        if self._is_held(pygame.K_s, 31):
+            tgt[1] -= step
 
-        if self._is_held(pygame.K_a, 30):   tgt[0] -= step
+        if self._is_held(pygame.K_a, 30):
+            tgt[0] -= step
 
-        if self._is_held(pygame.K_d, 32):   tgt[0] += step
+        if self._is_held(pygame.K_d, 32):
+            tgt[0] += step
 
-        if self._is_held(pygame.K_PAGEUP, 73):   tgt[2] += vstep
+        if self._is_held(pygame.K_PAGEUP, 73):
+            tgt[2] += vstep
 
-        if self._is_held(pygame.K_PAGEDOWN, 78): tgt[2] -= vstep
+        if self._is_held(pygame.K_PAGEDOWN, 78):
+            tgt[2] -= vstep
 
         tgt[2] = max(0.3, tgt[2])
 
@@ -579,13 +525,9 @@ class Simulation:
 
         self.mc.target_pos = m_to_cm(tgt)
 
-
-
     def _is_held(self, keycode, scancode):
 
         return keycode in self._keys_held or scancode in self._scan_held
-
-
 
     # =========================================================================
 
@@ -597,13 +539,9 @@ class Simulation:
 
     # =========================================================================
 
-
-
     def _render(self):
 
         self.screen.fill(SKY_BLUE)
-
-
 
         # ---- 中栏: 3D 场景 ----
 
@@ -611,15 +549,11 @@ class Simulation:
 
         scene_w = self.width - self.PANEL_W - self.CAMERA_W
 
-
-
         # 地面
 
         draw_ground(self.screen, y_ground=self.height - 100,
 
                     w=self.width, h=100)
-
-
 
         # 风机
 
@@ -629,21 +563,15 @@ class Simulation:
 
                      blade_angle=self._blade_angle)
 
-
-
         # 风粒子
 
         wind_vec = self.wind.sample(0.1) * 5
 
         draw_wind_particles(self.screen, wind_vec[:2])
 
-
-
         # 路径
 
         draw_path(self.screen, self.path, current_idx=self.path_idx)
-
-
 
         # 无人机
 
@@ -653,13 +581,9 @@ class Simulation:
 
                    scale=0.35, rotor_phase=self._sim_time * 20)
 
-
-
         # 机械臂
 
         draw_arm(self.screen, pos, self.arm.angles, scale=0.35)
-
-
 
         # HUD (场景内)
         # #15: 复用 mc.get_state_dict(), 追加 sim 专有字段 (不重复造轮子)
@@ -690,15 +614,11 @@ class Simulation:
 
                  width=scene_w)
 
-
-
         # ---- 左栏: 遥测面板 ----
 
         draw_telemetry_panel(self.screen, self.font_sm,
 
                              0, 0, self.PANEL_W, state_dict)
-
-
 
         # ---- 右栏: 摄像机画面 ----
 
@@ -715,8 +635,6 @@ class Simulation:
         cam_label = self.font_sm.render("CAMERA", True, WHITE)
 
         self.screen.blit(cam_label, (cam_x + 10, 8))
-
-
 
         # 模拟摄像机画面 (接近风机时显示检测框)
 
@@ -754,15 +672,13 @@ class Simulation:
 
                                  (cam_x + x1, y1 - 15, x2 - x1, y2 - y1), 2)
 
-                l = self.font_sm.render(d["class_name"], True, RED)
+                label = self.font_sm.render(d["class_name"], True, RED)
 
-                self.screen.blit(l, (cam_x + x1, y1 - 32))
+                self.screen.blit(label, (cam_x + x1, y1 - 32))
 
         else:
 
             self._mock_detections = []
-
-
 
         # 右栏下半: 检测日志
 
@@ -788,8 +704,6 @@ class Simulation:
 
                 self.screen.blit(s, (cam_x + 15, log_y + 22 + i * 18))
 
-
-
                 # ---- 右栏: 机械臂面板 ----
 
         arm_panel_y = self.height - 180
@@ -802,12 +716,7 @@ class Simulation:
 
                        "[{:.0f}, {:.0f}, {:.0f}]".format(*np.array(self.arm.get_endpoint()) * 1000))  # m→mm
 
-
-
         pygame.display.flip()
-
-
-
 
 
 if __name__ == "__main__":
@@ -833,4 +742,3 @@ if __name__ == "__main__":
         pygame.quit()  # #25: 保证 pygame 清理
 
         print("[SIM] 仿真结束")
-

@@ -142,7 +142,10 @@ def test_safety_guard_integrated():
     print("[TEST] SafetyGuard 集成验证")
     mc = MissionController(mode="simulation", mock=True)
     mc.state = "HOVERING"
-    mc._battery = 5  # 低电量
+    # P1-1: 用"低于配置阈值"而不是魔数 5 —— 阈值现在真的来自
+    # config/drone_config.yaml 的 safety.tiers.battery_kill (5),
+    # 边界值 5 不再触发 KILL, 这里取配置值 -1 保持原用例意图。
+    mc._battery = int(mc.safety_guard.THRESHOLDS["battery_kill"]) - 1
 
     # _check_safety 应触发
     triggered = mc._check_safety()

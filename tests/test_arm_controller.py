@@ -12,7 +12,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from backend.arm.arm_controller import ArmController
-from backend.arm.arm_kinematics import FK, IK
+from backend.arm.arm_kinematics import FK
 
 
 def test_arm_controller_mock():

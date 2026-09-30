@@ -13,7 +13,6 @@
 from __future__ import annotations
 
 import os
-import re
 from pathlib import Path
 from typing import Any, Dict, List, Union
 
@@ -37,17 +36,14 @@ DEFAULT_CONFIG_DIRS: List[Path] = [
 
 class ConfigError(Exception):
     """配置相关错误的基类"""
-    pass
 
 
 class ConfigKeyError(ConfigError):
     """配置键缺失或访问错误"""
-    pass
 
 
 class ConfigTypeError(ConfigError):
     """配置值类型不匹配"""
-    pass
 
 
 class Config:

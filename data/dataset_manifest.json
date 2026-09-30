@@ -1,0 +1,103 @@
+{
+  "manifest_type": "dataset",
+  "schema_version": 1,
+  "generated_at": "2026-09-30T08:24:41Z",
+  "generator": "scripts/make_manifest.py",
+  "dataset_version": "dv-b1b73e88f59e51c1",
+  "dataset_version_source": "derived-from-entries",
+  "digest_policy": {
+    "size_threshold_bytes": 209715200,
+    "size_threshold_mb": 200.0,
+    "small_entry_algorithm": "content-sha256-tree",
+    "large_entry_algorithm": "path-size-sha256",
+    "large_entry_is_content_hash": false
+  },
+  "exclusion_policy": {
+    "note": "运行期产物不计入 dataset_version, 否则版本号会随每次运行/测试变化",
+    "directories": [
+      "logs",
+      "omnisim",
+      "test_results"
+    ],
+    "file_suffixes": [
+      ".png"
+    ],
+    "affects_version": false
+  },
+  "roots": [
+    {
+      "path": "data/processed",
+      "exists": true,
+      "entries": [
+        {
+          "path": "data/processed/wind_turbine_defect.yaml",
+          "type": "file",
+          "files": 1,
+          "bytes": 144,
+          "digest": {
+            "algorithm": "content-sha256",
+            "value": "e128466a06594d9ec613c348a6b0375b5130204cfc87da71833e41a1e162ba90"
+          },
+          "digest_note": "文件字节的 SHA256（真实内容哈希）"
+        }
+      ],
+      "excluded": [
+        {
+          "path": "data/processed/disturbance_comparison.png",
+          "reason": "运行期生成的图片(测试/验证产出), 不属于数据集内容"
+        },
+        {
+          "path": "data/processed/omnisim",
+          "reason": "运行期产物目录(日志/仿真输出/测试结果), 不属于数据集内容"
+        },
+        {
+          "path": "data/processed/rrt_star_path.png",
+          "reason": "运行期生成的图片(测试/验证产出), 不属于数据集内容"
+        },
+        {
+          "path": "data/processed/step_response.png",
+          "reason": "运行期生成的图片(测试/验证产出), 不属于数据集内容"
+        },
+        {
+          "path": "data/processed/test_results",
+          "reason": "运行期产物目录(日志/仿真输出/测试结果), 不属于数据集内容"
+        }
+      ],
+      "excluded_count": 5,
+      "files": 1,
+      "bytes": 144
+    },
+    {
+      "path": "data/raw",
+      "exists": true,
+      "entries": [
+        {
+          "path": "data/raw/train",
+          "type": "dir",
+          "files": 26069,
+          "bytes": 780135709,
+          "digest": {
+            "algorithm": "path-size-sha256",
+            "value": "287c12d041ce9162f7be4d01afd239b532cd0aebd5793f7ee0a7474e5a91a5d4"
+          },
+          "digest_note": "仅相对路径+文件大小的清单指纹，非内容哈希"
+        },
+        {
+          "path": "data/raw/val",
+          "type": "dir",
+          "files": 4989,
+          "bytes": 156577280,
+          "digest": {
+            "algorithm": "content-sha256-tree",
+            "value": "cb8df46adb8ae2b491c3d46627ddff979a6e9a50331aab05067d01d95484e4e4"
+          },
+          "digest_note": "目录内容哈希（relpath+字节，真实内容哈希）"
+        }
+      ],
+      "excluded": [],
+      "excluded_count": 0,
+      "files": 31058,
+      "bytes": 936712989
+    }
+  ]
+}

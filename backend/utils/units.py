@@ -39,21 +39,26 @@ def m_to_cm(val: Vec) -> Union[float, np.ndarray]:
     """米 → 厘米"""
     return np.asarray(val, dtype=float) * 100.0
 
+
 def cm_to_m(val: Vec) -> Union[float, np.ndarray]:
     """厘米 → 米"""
     return np.asarray(val, dtype=float) / 100.0
+
 
 def mm_to_cm(val: Vec) -> Union[float, np.ndarray]:
     """毫米 → 厘米"""
     return np.asarray(val, dtype=float) / 10.0
 
+
 def cm_to_mm(val: Vec) -> Union[float, np.ndarray]:
     """厘米 → 毫米"""
     return np.asarray(val, dtype=float) * 10.0
 
+
 def m_to_mm(val: Vec) -> Union[float, np.ndarray]:
     """米 → 毫米"""
     return np.asarray(val, dtype=float) * 1000.0
+
 
 def mm_to_m(val: Vec) -> Union[float, np.ndarray]:
     """毫米 → 米"""
@@ -68,13 +73,16 @@ def mps_to_cmps(val: Vec) -> Union[float, np.ndarray]:
     """m/s → cm/s"""
     return np.asarray(val, dtype=float) * 100.0
 
+
 def cmps_to_mps(val: Vec) -> Union[float, np.ndarray]:
     """cm/s → m/s"""
     return np.asarray(val, dtype=float) / 100.0
 
+
 def mps2_to_cmps2(val: Vec) -> Union[float, np.ndarray]:
     """m/s² → cm/s²"""
     return np.asarray(val, dtype=float) * 100.0
+
 
 def cmps2_to_mps2(val: Vec) -> Union[float, np.ndarray]:
     """cm/s² → m/s²"""

@@ -6,6 +6,16 @@
  * 舵机驱动: PCA9685 (I2C, 地址0x40)
  * 舵机: 3×SG90 (底座S1/大臂S2/小臂S3)
  * 波特率: 115200
+ *
+ * ⚠️⚠️⚠️ 未经硬件验证 ⚠️⚠️⚠️
+ * 本次改动(ACK 回复 + 限位开关)是在**没有实机**的情况下写的: 没有 Arduino Nano,
+ * 没有 PCA9685, 没有接限位开关, 也没有示波器/逻辑分析仪核对时序。已做的只有
+ * 逐行代码审查与主机侧协议测试(见 tests/test_arm_protocol.py, 用假串口)。
+ * 上电前必须先在台架上验证: (1) ACK 行格式与到达时机; (2) 限位开关的电平极性
+ * (常开/常闭)与引脚接线; (3) 限位触发后该方向确实停住。
+ *
+ * 本固件**不做**堵转检测/电流/温度检测: SG90 是开环舵机, 内部没有位置、电流、
+ * 温度传感通道, 这些量在现有硬件上物理不可读。不要用"没报错"当"没堵转"。
  * 
  * 【技术选型说明】
  * 舵机控制: 选用PCA9685 I2C方案而非直接PWM，原因:
@@ -66,6 +76,34 @@
 #define PWM_FREQ 50
 
 // =============================================================================
+// 限位开关 (本次新增, 未在实机验证)
+// =============================================================================
+// 引脚选择说明: PCA9685 占用 A4/A5(I2C), 串口占用 D0/D1, 因此限位开关放在
+// D4/D5/D6 —— 它们既不是中断专用脚也不是 PWM 必需脚, 且都支持内部上拉。
+// 默认按"常闭(NC)+ 内部上拉"接线: 开关未触发时对地闭合 → 读到 LOW;
+// 触发(压到限位)时开路 → 上拉读到 HIGH。若你的开关是常开(NO), 把
+// LIMIT_TRIGGERED_LEVEL 改成 LOW 即可(注意那时候"没接开关"会被判成触发)。
+//
+// 【未接限位开关时怎么办】
+//   * 保持 LIMIT_ENABLED_xxx = 0 → 该关节完全跳过限位判断(不会误报 LIMIT),
+//     这是当前默认值, 因为现在没有接开关;
+//   * 接好开关后再逐个改成 1。若开着使能却没接线: 内部上拉会把引脚拉高,
+//     按默认"触发=HIGH"会被判成**常触发**, 所以使能前必须先接线。
+#define PIN_LIMIT_BASE      4
+#define PIN_LIMIT_SHOULDER  5
+#define PIN_LIMIT_ELBOW     6
+
+#define LIMIT_ENABLED_BASE      0   // 0 = 该关节限位未接线/禁用
+#define LIMIT_ENABLED_SHOULDER  0
+#define LIMIT_ENABLED_ELBOW     0
+
+// 开关触发时读到的电平 (常闭+上拉 → 触发=HIGH)
+#define LIMIT_TRIGGERED_LEVEL   HIGH
+
+// 限位判断死区(度): 距目标小于该值就不再做方向上的限位拦截, 避免抖动
+#define LIMIT_DEADBAND_DEG      1
+
+// =============================================================================
 // 运动控制参数
 // =============================================================================
 
@@ -119,6 +157,23 @@ bool isMoving = false;
 // 上次运动步进的时间戳
 unsigned long lastStepTime = 0;
 
+// 是否需要在本次运动结束后回一行 ACK（收到 A/R/H 时置位）
+bool pendingAck = false;
+
+// 各关节最近一次被限位压住的方向: 0=未知, +1=高角度侧, -1=低角度侧
+// (仅用于区分"往限位里继续压"与"往回退", 不是位置反馈)
+int limitSide[3] = {0, 0, 0};
+
+// 前置声明: 不依赖 Arduino IDE 的自动原型生成, 便于静态审查/单独编译
+bool isLimitTriggered(int joint);
+bool limitEnabled(int joint);
+int  limitPin(int joint);
+const char* jointName(int joint);
+int  blockedJoints(const int* targets);
+void sendAck();
+void goHome();
+void processSmoothMotion();
+
 // =============================================================================
 // 初始化
 // =============================================================================
@@ -139,6 +194,10 @@ void setup() {
   // 初始化I2C总线
   Wire.begin();
   
+  // 限位开关输入 (内部上拉); 未使能的关节同样初始化, 便于后续直接用
+  pinMode(PIN_LIMIT_BASE, INPUT_PULLUP);
+  pinMode(PIN_LIMIT_SHOULDER, INPUT_PULLUP);
+  pinMode(PIN_LIMIT_ELBOW, INPUT_PULLUP);
   // 初始化PCA9685
   pca.begin();
   // 设置PWM输出频率为50Hz（舵机标准频率）
@@ -155,6 +214,9 @@ void setup() {
   // 上电归位：所有舵机平滑移动到90度
   Serial.println(F("[INIT] 正在归位到默认姿态 (90, 90, 90)..."));
   goHome();
+  // 上电归位不是主机指令, 不能留下一个"无人认领"的 ACK: 否则主机第一条
+  // 指令可能把这个开机 ACK 当成本次回复(若请求恰好也是 90,90,90 就会假成功)
+  pendingAck = false;
   
   // 初始化看门狗计时器
   lastCommandTime = millis();
@@ -221,6 +283,14 @@ void processSerialInput() {
  * Q                            → 查询（Query），返回当前三个关节角度
  * S                            → 停止（Stop），立即停止运动
  * ?                            → 帮助信息
+ * 
+ * 固件主动上报行 (本次新增):
+ *   ACK:A<base>,S<shoulder>,E<elbow>  → A/R/H 动作**完成后**回一行,
+ *        内容是本固件 internal currentAngles(命令到达的位置), 不是测量值。
+ *        若运动被看门狗中断, 也会回一行"实际停在哪", 主机比对不上即判失败。
+ *    LIMIT:<joint>   → 限位开关触发, 该关节拒绝**压向限位**的那个方向;
+ *        本帧不再回 ACK(一个请求只回一类答复, 避免主机混读)。
+ *        关节名: base / shoulder / elbow。
  * 
  * 示例:
  *   A90,45,30   → 设置目标角度为 base=90, shoulder=45, elbow=30
@@ -297,11 +367,25 @@ void handleAbsoluteMode(char* params) {
     }
   }
   
+  // 限位检查(未接线时恒为 0, 行为与旧版一致):
+  // 被拦住的关节"拒绝该方向", 保持当前位置; 未被拦的关节照常执行。
+  // 只要有任一关节被拦, 就回 LIMIT 行且**不回 ACK**(避免主机把本帧 ACK
+  // 与下一帧混读)。
+  int blocked = blockedJoints(angles);
+  for (int i = 0; i < 3; i++) {
+    if (blocked & (1 << i)) {
+      Serial.print(F("LIMIT:"));
+      Serial.println(jointName(i));
+      angles[i] = currentAngles[i];
+    }
+  }
+
   // 设置目标角度
   targetAngles[0] = angles[0];
   targetAngles[1] = angles[1];
   targetAngles[2] = angles[2];
   isMoving = true;
+  pendingAck = (blocked == 0);   // 被拦则本帧只回 LIMIT
   
   Serial.print(F("[ABS] 目标角度 → Base:"));
   Serial.print(targetAngles[0]);
@@ -330,7 +414,18 @@ void handleRelativeMode(char* params) {
     // 限制在0-180范围内
     targetAngles[i] = constrain(targetAngles[i], 0, 180);
   }
+
+  // 限位检查(与绝对模式同一套逻辑)
+  int blocked = blockedJoints(targetAngles);
+  for (int i = 0; i < 3; i++) {
+    if (blocked & (1 << i)) {
+      Serial.print(F("LIMIT:"));
+      Serial.println(jointName(i));
+      targetAngles[i] = currentAngles[i];
+    }
+  }
   isMoving = true;
+  pendingAck = (blocked == 0);
   
   Serial.print(F("[REL] 增量 ("));
   Serial.print(deltas[0]);
@@ -382,6 +477,8 @@ void processSmoothMotion() {
   // 所有舵机都到达目标
   if (allReached) {
     isMoving = false;
+    // ACK 必须排在 [OK] 之前: 主机只读第一行做判定
+    if (pendingAck) sendAck();
     Serial.println(F("[OK] 运动完成"));
   }
 }
@@ -402,6 +499,10 @@ void checkWatchdog() {
       targetAngles[0] = currentAngles[0];
       targetAngles[1] = currentAngles[1];
       targetAngles[2] = currentAngles[2];
+      // 被看门狗中断也算"运动结束": 回真实(命令)当前位置, 让主机别干等超时。
+      // 主机拿它和请求角度一比就会因为超容差而判失败(ACK_MISMATCH), 这是
+      // 有意的: 没走到就是没走到。
+      if (pendingAck) sendAck();
       Serial.println(F("[WDOG] 看门狗触发：500ms未收到指令，保持当前位置"));
     }
   }
@@ -448,6 +549,82 @@ void setServoAngle(int servoIndex, int angle) {
 }
 
 // =============================================================================
+// 限位开关 与 ACK 上报 (本次新增, 未实机验证)
+// =============================================================================
+
+/** 关节序号 → 限位引脚 (非法序号返回 -1) */
+int limitPin(int joint) {
+  switch (joint) {
+    case 0: return PIN_LIMIT_BASE;
+    case 1: return PIN_LIMIT_SHOULDER;
+    case 2: return PIN_LIMIT_ELBOW;
+    default: return -1;
+  }
+}
+
+/** 关节序号 → 限位是否使能(接线了) */
+bool limitEnabled(int joint) {
+  switch (joint) {
+    case 0: return LIMIT_ENABLED_BASE != 0;
+    case 1: return LIMIT_ENABLED_SHOULDER != 0;
+    case 2: return LIMIT_ENABLED_ELBOW != 0;
+    default: return false;
+  }
+}
+
+/** 关节名(用于 LIMIT 上报) */
+const char* jointName(int joint) {
+  switch (joint) {
+    case 0: return "base";
+    case 1: return "shoulder";
+    case 2: return "elbow";
+    default: return "unknown";
+  }
+}
+
+/** 限位开关当前是否处于触发状态 (未使能 → 恒 false, 不会误报) */
+bool isLimitTriggered(int joint) {
+  if (!limitEnabled(joint)) return false;
+  int pin = limitPin(joint);
+  if (pin < 0) return false;
+  return digitalRead(pin) == LIMIT_TRIGGERED_LEVEL;
+}
+
+/**
+ * 检查"往目标方向运动"是否被限位拦住。
+ * 返回: 被拦住的关节掩码(bit0=base, bit1=shoulder, bit2=elbow), 0 = 允许。
+ *
+ * 只拦"继续往触发方向走"的那种运动:
+ *   - 已经触发且目标比当前位置更远离限位方向 → 拦住;
+ *   - 已经触发但目标在往回走(反方向) → 放行, 否则会把自己锁死在限位上;
+ *   - 目标与当前差在 LIMIT_DEADBAND_DEG 以内 → 放行(避免抖动误拦)。
+ * 注意: 这里只读 GPIO, 不做位置反馈 —— SG90 仍然不知道自己真实在哪。
+ */
+int blockedJoints(const int* targets) {
+  int blocked = 0;
+  for (int i = 0; i < 3; i++) {
+    if (!isLimitTriggered(i)) continue;              // 未触发: 不拦, 也不记方向
+    int diff = targets[i] - currentAngles[i];
+    if (abs(diff) <= LIMIT_DEADBAND_DEG) continue;   // 基本没动, 放行
+    int dir = (diff > 0) ? 1 : -1;
+    if (limitSide[i] == 0) limitSide[i] = dir;       // 首次触发: 记住被压住的一侧
+    if (dir == limitSide[i]) blocked |= (1 << i);    // 只拦继续压向限位的那一侧
+  }
+  return blocked;
+}
+
+/** 上报一行 ACK (固件自报的"命令位置", 不是测量值) */
+void sendAck() {
+  Serial.print(F("ACK:A"));
+  Serial.print(currentAngles[0]);
+  Serial.print(F(",S"));
+  Serial.print(currentAngles[1]);
+  Serial.print(F(",E"));
+  Serial.println(currentAngles[2]);
+  pendingAck = false;
+}
+
+// =============================================================================
 // 辅助功能
 // =============================================================================
 
@@ -459,6 +636,7 @@ void goHome() {
   targetAngles[1] = HOME_SHOULDER;
   targetAngles[2] = HOME_ELBOW;
   isMoving = true;
+  pendingAck = true;   // H 指令同样在到位后回 ACK
   Serial.println(F("[HOME] 正在归位到 (90, 90, 90)..."));
 }
 
@@ -521,6 +699,9 @@ void printHelp() {
   Serial.println(F("Q                          查询当前角度"));
   Serial.println(F("S                          紧急停止"));
   Serial.println(F("?                          显示本帮助"));
+  Serial.println(F(""));
+  Serial.println(F("回复行: ACK:A90,S90,E90  (动作完成后回, 命令位置非测量值)"));
+  Serial.println(F("        LIMIT:elbow      (限位开关触发, 已拒绝该方向)"));
   Serial.println(F(""));
   Serial.println(F("角度范围: 0-180度"));
   Serial.println(F("平滑速度: 50度/秒 (每20ms移动1度)"));

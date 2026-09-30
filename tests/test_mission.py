@@ -7,9 +7,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from backend.mission.states import (
-    MissionState, TRANSITIONS, can_transition, transition,
+    MissionState, can_transition, transition,
 )
-from backend.mission.safety import FailsafeMonitor, SafetyLevel, SafetyEvent
+from backend.mission.safety import FailsafeMonitor, SafetyLevel
 
 
 # =========================================================================
@@ -19,9 +19,15 @@ from backend.mission.safety import FailsafeMonitor, SafetyLevel, SafetyEvent
 def test_state_enum():
     """状态枚举定义完整"""
     print("[TEST] 状态枚举")
-    assert len(MissionState) == 8
+    # 审计第 1 条: 原先只有 8 个状态, FAULT/MISSION_FAILED 只是 main.py 里的字符串,
+    # 于是 request_state() 的 `except KeyError: pass` 会把转换表校验整体跳过 ——
+    # 实测可在 FAULT 状态下 request_state("TAKEOFF") 成功复活。现在二者是权威枚举
+    # 成员(终态, 无出边), 共 10 个。
+    assert len(MissionState) == 10
     assert MissionState.IDLE.name == "IDLE"
     assert MissionState.EMERGENCY.name == "EMERGENCY"
+    assert MissionState.FAULT.name == "FAULT"
+    assert MissionState.MISSION_FAILED.name == "MISSION_FAILED"
     print("  [PASS]")
 
 

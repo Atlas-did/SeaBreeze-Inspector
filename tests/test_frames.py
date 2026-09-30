@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Coordinate frame conversion roundtrip tests - Phase 2 deliverable."""
 
-import sys, numpy as np
+import sys
+
+import numpy as np
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-import pytest
 from backend.utils.units import (
     zup_cm_to_yup_m, yup_m_to_zup_cm,
     zup_m_to_yup_m, yup_m_to_zup_m,

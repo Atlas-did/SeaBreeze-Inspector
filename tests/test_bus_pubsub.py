@@ -15,8 +15,8 @@ sys.path.insert(0, str(PROJECT_ROOT))
 import pytest
 
 from backend.utils.bus import (
-    Message, MessageBus, create_message_bus,
-    TOPIC_MISSION_STATUS, TOPIC_DRONE_COMMAND,
+    Message, create_message_bus, TOPIC_MISSION_STATUS,
+    TOPIC_DRONE_COMMAND,
 )
 
 

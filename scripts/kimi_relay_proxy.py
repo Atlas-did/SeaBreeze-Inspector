@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Kimi (Moonshot) relay proxy — 让 OmniSim 的 OllamaRelay 走 Kimi 官方 API。
+r"""Kimi (Moonshot) relay proxy — 让 OmniSim 的 OllamaRelay 走 Kimi 官方 API。
 
 OmniSim 的聊天 relay 支持三种后端：OmniLink 云端 / 本地 Ollama / 离线正则。
 Kimi 是 OpenAI 兼容 API，两者都没有原生接入。这个代理把 OmniSim 的
@@ -31,7 +31,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import threading
 import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer

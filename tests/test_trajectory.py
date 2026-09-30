@@ -10,7 +10,6 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -94,7 +93,7 @@ def test_rrt_star_performance():
     times = []
     for _ in range(5):
         t0 = time.perf_counter()
-        path = planner.plan(start, goal, obstacles)
+        planner.plan(start, goal, obstacles)
         t1 = time.perf_counter()
         times.append((t1 - t0) * 1000)
 

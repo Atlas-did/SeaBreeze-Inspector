@@ -93,15 +93,21 @@ def check_model_weights(ci_mode: bool = False) -> list[tuple[bool, str]]:
             results.append((True, _warn("data/weights/ 目录不存在 (将使用 mock 检测)")))
         return results
 
-    found = list(weights_dir.glob("*.pt"))
+    # P1-4 修复: 此前 glob("*.pt") 会把 .ci-placeholder.pt 当成真实权重,
+    # 导致"干净克隆 + 占位文件"也能通过 CI, 而实际没有可用模型。
+    # 现在忽略隐藏文件(以 . 开头)与明显小于真实权重的文件。
+    found = [w for w in weights_dir.glob("*.pt")
+             if not w.name.startswith(".") and w.stat().st_size >= 1_000_000]
     if found:
         for w in found:
             results.append((True, _ok(f"data/weights/{w.name}")))
     else:
+        ignored = [w.name for w in weights_dir.glob("*.pt") if w.name.startswith(".")]
+        note = (" (已忽略占位文件: " + ", ".join(ignored) + ")") if ignored else ""
         if ci_mode:
-            results.append((False, _err("data/weights/ 为空 (CI 模式下需要模型权重)")))
+            results.append((False, _err("data/weights/ 没有可用权重 (CI 模式下需要真实模型)" + note)))
         else:
-            results.append((True, _warn("data/weights/ 为空 (将使用 mock 检测)")))
+            results.append((True, _warn("data/weights/ 没有可用权重 (将使用 mock 检测)" + note)))
     return results
 
 
@@ -160,6 +166,10 @@ def check_backend_imports() -> list[tuple[bool, str]]:
 def main():
     ci_mode = "--ci" in sys.argv
     json_mode = "--json" in sys.argv
+    # P2 修复(审计): code-ci 不应要求真实模型权重 —— 权重由 model-release-ci
+    # 从受控仓库按 SHA256 拉取后再验证。--no-weights 让代码流水线不再因为
+    # "干净克隆里本来就没有 .pt" 而整体失败。
+    weights_required = "--no-weights" not in sys.argv
 
     all_checks = []
     fatal = False
@@ -199,9 +209,13 @@ def main():
     for ok, msg in check_config_files():
         add(ok, msg)
 
-    # 模型权重
-    for ok, msg in check_model_weights(ci_mode=ci_mode):
-        add(ok, msg)
+    # 模型权重 (code-ci 用 --no-weights 跳过; 由 model-release-ci 负责)
+    if weights_required:
+        for ok, msg in check_model_weights(ci_mode=ci_mode):
+            add(ok, msg)
+    elif not json_mode:
+        print("[SKIP] 模型权重检查已跳过 (--no-weights: 由 model-release-ci 按 SHA256 拉取后验证)")
+        print()
 
     # 目录结构
     if not json_mode:

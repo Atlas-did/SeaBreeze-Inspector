@@ -17,7 +17,6 @@ sys.path.insert(0, str(PROJECT_ROOT))
 import pytest
 
 from backend.drone.commands import (
-    AltitudeHoldDriver,
     FlightCommand,
     CommandResult,
     execute_instant,
@@ -74,8 +73,10 @@ def test_run_altitude_hold_rejected_driver_skips_settle():
     class RejectingDriver:
         def backend_name(self):
             return "rejecting"
+
         def set_target_altitude(self, meters):
             return False
+
         def settle(self, seconds, dt=0.02):
             raise AssertionError("settle must not be called when accepted=False")
     r = run_altitude_hold(RejectingDriver(), target_m=1.5, settle_s=5.0, seed=42)

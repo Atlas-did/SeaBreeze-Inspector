@@ -22,18 +22,22 @@ from __future__ import annotations
 import csv
 import json
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 
 # 默认日志输出目录（相对项目根目录）
+# P1-3b: 从 data/processed/logs 移到 data/logs。
+# 原因: data/processed 是**数据集目录**, 运行日志混在里面会让
+# dataset_manifest 的 dataset_version 每跑一次测试就变(实测 140→146 文件),
+# 使"这份结果用的是哪个数据集"失去可信锚点。
 try:
     from backend.utils.config import PROJECT_ROOT
-    DEFAULT_LOG_DIR: Path = PROJECT_ROOT / "data" / "processed" / "logs"
+    DEFAULT_LOG_DIR: Path = PROJECT_ROOT / "data" / "logs"
 except ImportError:
-    DEFAULT_LOG_DIR: Path = Path(__file__).resolve().parents[2] / "data" / "processed" / "logs"
+    DEFAULT_LOG_DIR: Path = Path(__file__).resolve().parents[2] / "data" / "logs"
 
 
 @dataclass
@@ -90,7 +94,7 @@ class FlightLogger:
         初始化日志记录器。
 
         参数:
-            log_dir: 日志存储目录，默认 data/processed/logs/
+            log_dir: 日志存储目录，默认 data/logs/ (不再写入数据集目录)
             session_name: 会话名称，默认使用当前时间
         """
         self.log_dir: Path = log_dir or DEFAULT_LOG_DIR

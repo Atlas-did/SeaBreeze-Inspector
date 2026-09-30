@@ -61,6 +61,15 @@ class DroneInterface(ABC):
         """Move to relative position (cm). Returns True if command accepted."""
         ...
 
+    def set_velocity(self, vx: float, vy: float, vz: float, yaw: float = 0.0) -> bool:
+        """P0-2: 持续速度指令入口 (cm/s, 范围 ±100)。
+
+        这是主控制链的正式入口(与 10Hz 控制周期语义一致), 取代周期性 move_to()。
+        故意不给默认实现的身体: 默认直接**拒绝**并返回 False, 迫使各适配器显式
+        实现, 而不是悄悄退化成"一次性位移"语义。
+        """
+        return False
+
     @abstractmethod
     def hover(self) -> None:
         """Send hover command (zero velocity)."""

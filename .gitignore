@@ -33,6 +33,9 @@ Thumbs.db
 # Project-specific
 data/processed/logs/*.csv
 data/processed/*.png
+# 运行日志已从数据集目录迁出(P1-3b): 日志不再写进 data/processed
+data/logs/
+data/omnisim/
 data/weights/*.pt
 !data/weights/.gitkeep
 !data/weights/.ci-placeholder.pt
@@ -65,6 +68,9 @@ docs/*.md
 !docs/HARDWARE.md
 !docs/SOFTWARE.md
 !docs/SIM_GUIDE.md
+# HIL 协议与记录模板是**交付物**(审计第三步的执行依据), 不是内部笔记:
+# 未加此例外时 docs/*.md 会把它挡住, 导致"拆桨测试协议"永远提交不进仓库。
+!docs/HIL_PROTOCOL.md
 !docs/TESTING.md
 HANDOFF.md
 

@@ -9,7 +9,6 @@
 """
 
 import time
-import threading
 
 import numpy as np
 
@@ -18,14 +17,13 @@ from backend.core.feedforward_controller import FeedforwardController
 from backend.core.trajectory_planning import RRTStarPlanner
 from backend.vision.detect import DefectDetector
 from backend.mission.safety import FailsafeMonitor, SafetyLevel
-from backend.drone.rc_manager import RCManager  # N3: 激活RC管理
-from backend.drone.tello_basic import TelloController, FlightState
+from backend.drone.tello_basic import TelloController
 from backend.drone.tello_video import TelloVideoStream
 from backend.utils.logger import FlightLogger
 from backend.utils.config import ConfigLoader
-from backend.utils.bus import MessageBus, Message, create_message_bus
+from backend.utils.bus import create_message_bus
 from backend.utils.bus import TOPIC_MISSION_STATUS, TOPIC_DRONE_COMMAND
-from backend.mission.states import MissionState, can_transition
+from backend.mission.states import TERMINAL_STATES, MissionState, can_transition
 
 
 class MissionController:
@@ -84,12 +82,30 @@ class MissionController:
         # 无人机控制器 (P0-5: 组合TelloController)
         # =====================================================================
         self.drone = TelloController(mock=mock)
-        self.rc = RCManager(drone_controller=self.drone, mock=mock)
-        if not mock:
-            self.rc.start()
+        # P0-2a 修复(审计): 删除这里多余的 RCManager。
+        # 它把 TelloController 当作底层对象传入, 而 RCManager 调用的是
+        # send_rc_control —— TelloController 并没有这个方法, 所以那条 20Hz
+        # 线程自始至终空转, 而且 stop() 也从不停止它。
+        # 真正生效的 RC 管理器是 TelloController._rc (在 connect() 里 attach+start)。
         if self.mock:
             # P0-D: mock模式自动连接, 避免TAKEOFF死锁
             self.drone.connect()
+
+        # ---- 安全闸门与终态 (本轮新增) ----
+        # 真机默认**没有**可信外部定位: 位置观测是"上一帧估计的自我循环",
+        # 因此 NAVIGATE / INSPECT / RETURN 这些依赖位置的自动状态一律禁止进入,
+        # 直到显式调用 enable_external_localization() 声明已接入真实定位源。
+        self._external_localization = False
+        self._localization_source = None
+        self._localization_source_obj = None   # 真正的外部定位源对象 (见 attach_...)
+        self._last_localization = None         # 最近一次可用观测 (供状态汇报)
+        self._telemetry_stale = False          # 本帧遥测是否陈旧 (供状态汇报, 不被消费)
+        self._fault_descent_started = False    # FAULT 时是否已发起受控下降
+        self._video_last_obj = None            # 视频冻结检测: 上一帧对象
+        self._video_last_change_t = None       # 视频冻结检测: 最近一次换帧的时刻
+        self._video_seen_change = False        # 是否曾观察到换帧(避免启动瞬间误判)
+        self._fault_reason = None
+        self._mission_failed_reason = None
 
         # =====================================================================
         # 状态机 (P0-2: 完整8状态)
@@ -166,12 +182,26 @@ class MissionController:
     def _build_safety_guard(self):
         """构建分层 FailsafeMonitor (N1: 替换旧SafetyGuard)"""
         monitor = FailsafeMonitor()
-        # 三级阈值从 config 加载
-        monitor.THRESHOLDS["battery_warn"] = self._cfg_val("safety.battery_warn", 30)
-        monitor.THRESHOLDS["battery_land"] = self._cfg_val("safety.low_battery_land_threshold", 20)
-        monitor.THRESHOLDS["battery_kill"] = self._cfg_val("safety.battery_kill", 10)
-        monitor.THRESHOLDS["height_land"] = self._cfg_val("safety.boundary.z_max", 300)
-        monitor.THRESHOLDS["height_kill"] = self._cfg_val("safety.boundary.z_kill", 500)
+        T = monitor.THRESHOLDS
+        # P1-1 修复: 阈值优先读 config/drone_config.yaml 的 safety.tiers.*。
+        # 此前读的是 safety.battery_warn / safety.battery_kill 等 YAML 中并不存在的键,
+        # 导致 battery_warn 实际取硬编码 30(而非 YAML 的 20), 且 timeout_* 从未被读取。
+        # 旧键保留为向后兼容回退。
+        T["battery_warn"] = self._cfg_val(
+            "safety.tiers.battery_warn", self._cfg_val("safety.battery_warn", T["battery_warn"]))
+        T["battery_land"] = self._cfg_val(
+            "safety.tiers.battery_land",
+            self._cfg_val("safety.low_battery_land_threshold", T["battery_land"]))
+        T["battery_kill"] = self._cfg_val(
+            "safety.tiers.battery_kill", self._cfg_val("safety.battery_kill", T["battery_kill"]))
+        T["attitude_land"] = self._cfg_val("safety.tiers.attitude_land", T["attitude_land"])
+        T["attitude_kill"] = self._cfg_val("safety.tiers.attitude_kill", T["attitude_kill"])
+        T["height_land"] = self._cfg_val(
+            "safety.tiers.height_land", self._cfg_val("safety.boundary.z_max", T["height_land"]))
+        T["height_kill"] = self._cfg_val(
+            "safety.tiers.height_kill", self._cfg_val("safety.boundary.z_kill", T["height_kill"]))
+        T["timeout_land"] = self._cfg_val("safety.tiers.timeout_land", T["timeout_land"])
+        T["timeout_kill"] = self._cfg_val("safety.tiers.timeout_kill", T["timeout_kill"])
         return monitor
 
     # =========================================================================
@@ -192,9 +222,15 @@ class MissionController:
         if not self.mock:
             # 真机模式: 连接Tello
             if not self.drone.connect():
-                print("[MAIN] Tello连接失败, 切换到模拟模式")
-                self.mock = True
-                self.drone = TelloController(mock=True)
+                # P1-3: 硬件连接失败绝不降级为模拟 —— 直接进故障态并停任务。
+                # 此前会静默 self.mock = True 换一个模拟控制器, 让"根本没连上"
+                # 在日志和界面上看起来像正常运行。
+                self._hardware_fault = "Tello 连接失败"
+                self._running = False
+                print("[ERROR] HARDWARE_FAULT: Tello 连接失败, 任务不启动 "
+                      "(不会降级为模拟模式)")
+                return False
+        self._hardware_fault = None
 
         while self._running:
             loop_start = time.time()
@@ -207,8 +243,24 @@ class MissionController:
             if sleep_time > 0:
                 time.sleep(sleep_time)
 
+        return True
+
     def _update(self):
-        """单次控制循环"""
+        """单次控制循环 (带故障保护层, 审计 P0-C)。
+
+        此前 _update() 是裸调用: 传感器/控制器一旦抛异常, 会一路冲穿 start()
+        的主循环 —— 控制线程静默死掉, 而无人机还在空中按最后一条指令飞。
+        现在任何异常都会: 停止速度指令 → 进入 FAULT 终态 → 记录原因。
+        """
+        try:
+            self._update_inner()
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            self.mark_fault("控制循环异常: {}".format(e))
+
+    def _update_inner(self):
+        """单次控制循环 (实际实现)"""
 
         # =====================================================================
         # 1. 处理 Dashboard 命令
@@ -225,7 +277,8 @@ class MissionController:
         # =====================================================================
         self.ekf.predict(u=self._last_control_output)
         if z is not None:
-            self.ekf.update(z)
+            # 真机路径同样带测量年龄: 遥测包可能已经"旧"了一段时间才被消费。
+            self.ekf.update(z, age_s=self._telemetry_age_s())
 
         ekf_state = self.ekf.get_state()
         self.current_pos = ekf_state["position"]
@@ -236,11 +289,15 @@ class MissionController:
         # 4. 更新视频帧 (P1-12: 从视频流获取)
         # =====================================================================
         self._video_frame = self.video_stream.get_frame()
+        self._feed_localization_frame()
 
         # =====================================================================
         # 5. 安全检查 (P0-1: SafetyGuard集成)
         # =====================================================================
-        safety_triggered = self._check_safety()
+        self._check_safety()
+
+        # 审计第 4 条: 任务期逐帧有效性检查 (定位/视觉/视频中途失效当场处置)
+        self._check_task_validity()
 
         # =====================================================================
         # 6. 状态机处理 — EMERGENCY 时也必须运行 (执行紧急降落逻辑)
@@ -271,6 +328,28 @@ class MissionController:
         self._pending_control = np.zeros(3)
         detections = []
 
+        # ---------- FAULT / MISSION_FAILED: 终态, 但**安全动作必须继续执行** ----------
+        # 审计第 2 条: 终态不等于"什么都不做"。停速度之后飞机可能仍在空中, 必须每帧
+        # 继续推进受控下降直到触地; 只有确认落地(或本来就没起飞)才停手。
+        if self.state in self.FAILURE_STATES:
+            self._pending_control = np.zeros(3)
+            if getattr(self.drone, "is_flying", False):
+                descent = getattr(self.drone, "emergency_descent", None)
+                land = getattr(self.drone, "land", None)
+                try:
+                    if callable(descent):
+                        descent(timeout_s=0.1, poll_s=0.0, release_velocity=False)
+                    elif callable(land):
+                        land()
+                except TypeError:
+                    try:
+                        descent() if callable(descent) else land()
+                    except Exception as e:
+                        print("[FAULT] 受控下降失败: {}".format(e))
+                except Exception as e:
+                    print("[FAULT] 受控下降失败: {}".format(e))
+            return detections, self._pending_control
+
         # ---------- IDLE: 等待指令 ----------
         if self.state == "IDLE":
             pass  # 等待外部 set_target / plan_path / takeoff 调用
@@ -280,8 +359,7 @@ class MissionController:
             if self.drone.is_flying:
                 if self.current_pos[2] >= self.target_pos[2] - 20:
                     # 达到目标高度, 进入悬停
-                    self.state = "HOVERING"
-                    self._state_entry_time = time.time()
+                    self._set_state("HOVERING", "起飞完成", automatic=True)
                     print("[MAIN] 起飞完成, 进入悬停")
             else:
                 # 发送起飞指令
@@ -295,7 +373,8 @@ class MissionController:
                 disturbance_est=disturbance, current_vel=self.current_vel,
             )
             if self.path is not None and self.path_idx < len(self.path):
-                self.state = "NAVIGATE"
+                # 无外部定位时会被闸门拦下 -> MISSION_FAILED (不做假成功)
+                self._set_state("NAVIGATE", "进入导航", automatic=True)
                 print("[MAIN] 悬停→导航, 路径点数={}".format(len(self.path)))
 
         # ---------- NAVIGATE: 沿路径点移动 ----------
@@ -318,10 +397,12 @@ class MissionController:
                         disturbance_est=disturbance, current_vel=self.current_vel,
                     )
             else:
-                # 路径走完, 进入巡检
-                self.state = "INSPECT"
-                self._state_entry_time = time.time()
-                print("[MAIN] 导航完成, 进入巡检")
+                # 路径走完, 进入巡检 —— 这里是审计 P0-A 的要害:
+                # 必须走统一闸门; 视觉不可用时进入 MISSION_FAILED,
+                # 绝不能显示"导航完成, 进入巡检"然后按巡检超时假装完成。
+                self._set_state("INSPECT", "导航完成", automatic=True)
+                if self.state == "INSPECT":
+                    print("[MAIN] 导航完成, 进入巡检")
 
         # ---------- INSPECT: 巡检 + 缺陷检测 ----------
         elif self.state == "INSPECT":
@@ -347,9 +428,18 @@ class MissionController:
             # 巡检完成后自动返航 (超时或手动触发)
             inspect_elapsed = time.time() - self._state_entry_time
             if inspect_elapsed > self._cfg_val("mission.inspect_timeout_s", 30):  # 30秒巡检超时
-                self.state = "RETURN"
-                self._state_entry_time = time.time()
-                print("[MAIN] 巡检超时, 开始返航")
+                # 审计 P0-A 第 3 条: 巡检期间视觉掉线(模型连续失败/无有效帧)时,
+                # 不能按"巡检完成"返航 —— 那会产生假的"任务成功"。
+                if not getattr(self.detector, "is_available", True):
+                    self._set_state(
+                        "MISSION_FAILED",
+                        "巡检期间 VISION_UNAVAILABLE: {}".format(
+                            getattr(self.detector, "unavailable_reason", "unknown")),
+                        force=True)
+                    print("[MISSION_FAILED] 巡检期间视觉不可用, 任务失败(不算完成)")
+                else:
+                    self._set_state("RETURN", "巡检超时", automatic=True)
+                    print("[MAIN] 巡检超时, 开始返航")
 
         # ---------- RETURN: 返航到起飞点 ----------
         elif self.state == "RETURN":
@@ -368,8 +458,7 @@ class MissionController:
 
             # 到达返航点后降落
             if np.linalg.norm(self.current_pos - home) < 30:
-                self.state = "LAND"
-                self._state_entry_time = time.time()
+                self._set_state("LAND", "返航完成", automatic=True)
                 print("[MAIN] 返航完成, 开始降落")
 
         # ---------- LAND: 降落 ----------
@@ -381,24 +470,40 @@ class MissionController:
                 self.drone.land()
             # 等待降落完成 (SimDroneAdapter 延迟 is_flying=False 直到物理触地)
             if not self.drone.is_flying or self.current_pos[2] < 20:
-                self.state = "IDLE"
-                self._state_entry_time = time.time()
+                self._set_state("IDLE", "降落完成", automatic=True)
                 print("[MAIN] 降落完成, 进入IDLE")
 
         # ---------- EMERGENCY: 紧急状态 ----------
         elif self.state == "EMERGENCY":
             # 紧急下降目标: 地面 (触发紧急时 trigger_emergency 已打印入口日志)
-            # P0-1 修复: 受控降落, 只在首次进入时下发一次下降; 近地面(<3m)升级硬停桨。
             self.target_pos[2] = 0.0
-            if not getattr(self, "_emergency_sent", False):
+            # 审计 P0-D 补完: 改为**分帧小脉冲**下降。
+            # 此前一次性 emergency() 在真机上最多阻塞 0.5s(约等于 10Hz 回路的 5 帧)。
+            # 有 emergency_descent 时每帧只推一小步(0.1s); 老适配器(如仿真)回退为
+            # "只下发一次 emergency()"。
+            descent = getattr(self.drone, "emergency_descent", None)
+            if callable(descent):
+                try:
+                    descent(timeout_s=0.1, poll_s=0.05, release_velocity=False)
+                except TypeError:          # 旧签名
+                    descent(timeout_s=0.1)
+            elif not getattr(self, "_emergency_sent", False):
                 self.drone.emergency()
                 self._emergency_sent = True
-            # 近地面(<3m 且仍在飞) -> 升级为硬停桨(唯一安全允许 kill 的场景)
-            if self.drone.is_flying and self.current_pos[2] < 300:
-                self.drone.kill()
+            # 审计 P0-D: 不再把"高度 <3m"当成通用安全证明(高度可能是陈旧/无效值)。
+            # 真机只有高度**确实已知**且 <=30cm 才允许真正停桨;
+            # 没有该能力的适配器(如 SimDroneAdapter)保留旧行为, 以免改动
+            # 已经过验证的仿真数值。
+            if self.drone.is_flying:
+                known = getattr(self.drone, "height_is_known", None)
+                if callable(known):
+                    if known() and float(self.current_pos[2]) < 30.0:
+                        self.drone.motor_cutoff("controlled_touchdown")
+                elif float(self.current_pos[2]) < 300:
+                    self.drone.kill()
             # 转为降落状态 (SimDroneAdapter 延迟 is_flying=False 直到物理触地)
             if not self.drone.is_flying:
-                self.state = "IDLE"
+                self._set_state("IDLE", "紧急降落完成", automatic=True)
                 self._emergency_sent = False
                 print("[MAIN] 紧急降落完成")
 
@@ -442,17 +547,34 @@ class MissionController:
             imu_y = (self.current_vel[1] + np.random.normal(0, 5)) if self.current_vel[1] != 0 else np.random.normal(0, 5)
             imu_z = np.random.normal(0, 5)
 
+            # P1-2: 本帧确实取到了传感器数据 -> 允许刷新安全心跳
+            self._sensor_fresh = True
             return np.array([
                 imu_x, imu_y, imu_z,                    # IMU加速度
                 self.current_pos[0] + np.random.normal(0, 2),  # 光流X
                 self.current_pos[1] + np.random.normal(0, 2),  # 光流Y
-                self.current_pos[2] + np.random.normal(0, 10), # 气压计高度
+                self.current_pos[2] + np.random.normal(0, 10),  # 气压计高度
             ])
         else:
             # 真机模式: 从TelloController获取
             drone_state = self.drone.get_state_dict()
             self._battery = drone_state.get("battery", 100)
             height = drone_state.get("height", 0)
+            # P0-C 补完: 新鲜度必须以**状态包到达**为准, 而不是"getter 没抛异常"。
+            # djitellopy 的 get_battery/get_height 读的是缓存字段, 链路断了照样返回
+            # 旧值且不抛异常 —— 只要还信任"没抛异常", 通信超时保护就形同虚设。
+            fresh_fn = getattr(self.drone, "has_fresh_telemetry", None)
+            if callable(fresh_fn):
+                try:
+                    max_age = self.safety_guard.THRESHOLDS.get("timeout_land", 1.0)
+                    self._sensor_fresh = bool(fresh_fn(max_age))
+                except Exception:
+                    self._sensor_fresh = False
+            else:
+                self._sensor_fresh = True
+            # 供状态汇报用的"陈旧"闩锁: _sensor_fresh 会被 _check_safety 每帧消费掉,
+            # 不能直接拿来对外汇报(否则健康链路也会显示陈旧)。
+            self._telemetry_stale = not self._sensor_fresh
 
             # P0-2b 修复: 真机姿态从 get_attitude() 接线(此前 current_attitude 恒 0,
             # 姿态保护是摆设)。Tello 真机不提供姿态, 返回空 dict 时回退 [0,0,0]。
@@ -467,10 +589,41 @@ class MissionController:
                 # Tello SDK 不提供姿态 -> 诚实回退, 不与假值混淆
                 self.current_attitude = np.zeros(3)
 
-            # P0-3 诚实化: 真机模式下 IMU 三轴与光流位置均为假观测
+            # P0-B: 若已接入外部定位且观测当下可用, 用**真实位置**替代自我循环假观测。
+            obs = self.read_localization()
+            # 审计第 5 条: 分通道记录新鲜度 —— 定位新鲜 ≠ 气压高度新鲜。
+            self._localization_fresh = obs is not None
+            self._barometer_fresh = bool(self._sensor_fresh)
+            if obs is not None:
+                pos = np.asarray(obs.position, dtype=float)
+                self._last_localization = obs
+                if self._sensor_fresh:
+                    z_bar = float(height)          # 气压计新鲜: 直接用
+                else:
+                    # 气压高度陈旧 -> 用**同一观测里**的定位高度(ArUco 也测 z), 而
+                    # 不是把 Tello 缓存值当新测量, 也不是把整包丢掉(那会白扔新鲜定位)。
+                    z_bar = float(pos[2]) if np.isfinite(pos[2]) else None
+                    if z_bar is None:
+                        print("[WARN] 气压陈旧且定位无有效高度 -> 本帧不注入观测")
+                        return None
+                    print("[WARN] 气压高度陈旧 -> 本帧高度改用同源定位观测(拒绝新旧混包)")
+                return np.array([
+                    0, 0, 0,                     # IMU (Tello SDK不直接提供)
+                    pos[0], pos[1],              # 光流X/Y <- 外部定位(带时间戳/质量分数)
+                    z_bar,                       # 气压计高度(新鲜气压 或 同源定位高度)
+                ])
+
+            # P0-C 补完: 遥测陈旧时**不得**把缓存值当作新观测注入 EKF ——
+            # 否则位置会被"冻住"却看起来一切正常(最危险的一类假成功)。
+            # 返回 None 表示"本帧没有可用测量", _update 里已有 `if z is not None` 保护,
+            # EKF 只做预测, 不拿旧值当新值。
+            if not self._sensor_fresh:
+                print("[WARN] 遥测陈旧: 本帧不注入传感器观测 (EKF 仅预测)")
+                return None
+
+            # P0-3 诚实化: **未接**外部定位时, 真机 IMU 三轴与光流位置均为假观测
             # (Tello SDK 不提供加速度; 光流用上一帧 EKF 估计 = 自我循环)。
-            # EKF 定位/扰动观测仅仿真成立; 真机需外部定位(ArUco/塔筒特征)接入
-            # 才能启用。此处显式告警一次, 避免把"自我循环"误当作定位能力。
+            # 此处显式告警一次, 避免把"自我循环"误当作定位能力。
             if not getattr(self, "_ekf_honesty_warned", False):
                 print("[WARN] 真机 EKF 定位是自我循环假观测 "
                       "(IMU=0, 光流=上一帧估计); 需外部定位输入方为有效定位。")
@@ -483,6 +636,24 @@ class MissionController:
                 float(height),               # 气压计高度
             ])
 
+    def _telemetry_age_s(self) -> float:
+        """本机遥测的年龄(秒)。
+
+        以"状态包到达时间戳"(见 TelloController.telemetry_packet_timestamp)为基准,
+        而不是"现在"—— 延迟到达的测量本来就旧, EKF 必须知道这一点。
+        拿不到时间戳(如仿真适配器)返回 0.0, 等价于旧行为。
+        """
+        ts_fn = getattr(self.drone, "telemetry_packet_timestamp", None)
+        if not callable(ts_fn):
+            return 0.0
+        try:
+            ts = ts_fn()
+        except Exception:
+            return 0.0
+        if ts is None:
+            return 0.0
+        return max(0.0, time.monotonic() - float(ts))
+
     # =========================================================================
     # 控制指令发送 (P0-7: 实现控制输出)
     # =========================================================================
@@ -491,23 +662,49 @@ class MissionController:
         """发送控制指令到无人机
 
         output: [vx, vy, vz] 速度指令 (cm/s), 范围 [-100, 100]
+
+        P0-2 修复: 此前真机分支调用 drone.move_to(), 而 move_to() 的实现其实是
+        一次性相对位移(move_left/forward/..., 还带 >20cm 死区, speed 参数被忽略)。
+        主循环每 100ms 调一次, 会造成过冲/阻塞/控制频率失真, 而且小修正被静默丢弃。
+        现在统一走速度控制: 真机 = RCManager 以 20Hz 持续下发 rc_control;
+        模拟 = 记录速度指令 + 主循环积分位置(与真机速度语义一致)。
         """
         # 保存控制输出供下一帧EKF使用
         self._last_control_output = np.asarray(output, dtype=float)
 
         if output is None or np.all(np.abs(output) < 1):
-            return  # 死区, 不发送
+            # 审计 P1 修复: 死区不能"什么都不做" —— 否则上一条非零 RC 指令会
+            # 一直生效到 RCManager 的 0.5s 超时归零, 等于指令多活半秒。
+            # 死区时应立即归零速度。
+            if not self.mock:
+                stop = getattr(self.drone, "stop_velocity", None)
+                if callable(stop):
+                    stop()
+            return
 
         vx, vy, vz = output
 
         if self.mock:
-            # 模拟模式: 更新内部位置估计
+            # 模拟模式: 由主循环积分位置。
+            # 注意: 仿真有自己的控制器/被控对象架构, 这里**不**注入速度,
+            # 否则会绕过仿真飞控直接改写四旋翼速度通道。
             self.current_pos += output * self.dt
             return
 
-        # 真机模式: 通过TelloController发送RC控制
-        if self.drone.state in (FlightState.HOVERING, FlightState.MOVING):
-            self.drone.move_to(float(vx), float(vy), float(vz), speed=30)
+        # 真机模式: P0-2 修复 —— 走 RC 速度控制。
+        # 此前调用 drone.move_to(), 而它的实现是一次性相对位移(move_left/forward/...)
+        # 且带 >20cm 死区: 与"每 100ms 一次的速度指令"语义不符。
+        # 用 getattr 防御: 第三方/旧适配器可能还没实现 set_velocity。
+        set_velocity = getattr(self.drone, "set_velocity", None)
+        if callable(set_velocity):
+            # 审计 P1: 检查返回值 —— 此前返回值被直接丢弃, 指令被拒绝也无人知晓
+            if not set_velocity(float(vx), float(vy), float(vz)):
+                self._velocity_reject_count = getattr(
+                    self, "_velocity_reject_count", 0) + 1
+                if self._velocity_reject_count in (1, 10, 100):
+                    print("[WARN] set_velocity 被拒绝 (第 {} 次): drone.state={}".format(
+                        self._velocity_reject_count,
+                        getattr(self.drone, "state", "?")))
 
     # =========================================================================
     # 安全检查 (P0-1: 集成SafetyGuard)
@@ -518,8 +715,14 @@ class MissionController:
         N1修复: 分层Failsafe — WARN告警/LAND自动降落/KILL急停
         返回 True 表示触发了 KILL 级紧急状态。
         """
-        # A1修复: 每帧心跳, 否则 monitor 创建 1s 后误报LAND, 3s 后误报KILL。
-        self.safety_guard.heartbeat()
+        # P1-2 修复: 此前每帧无条件 heartbeat(), 使 monitor 的 timeout_land /
+        # timeout_kill 永远算不出超时(通信中断也检测不到)。
+        # 现在心跳只由"本帧真的取到了传感器数据"驱动: _get_sensor_data 成功时
+        # 置 _sensor_fresh, 这里消费一次。既保留 A1 的"避免创建初期误报",
+        # 又恢复了通信超时检测能力。
+        if getattr(self, "_sensor_fresh", False):
+            self.safety_guard.heartbeat()
+            self._sensor_fresh = False
 
         # EMERGENCY 状态下允许状态机继续运行 (用于降落后的 IDLE 恢复)
         event = self.safety_guard.check(
@@ -542,11 +745,18 @@ class MissionController:
             # P1: _last_heartbeat 已由 FailsafeMonitor.heartbeat() 替代
         return False
 
-    def update_with_external_data(self, sensor_z, position, velocity, attitude):
+    def update_with_external_data(self, sensor_z, position, velocity, attitude,
+                                  telemetry_fresh: bool = True,
+                                  sensor_age_s: float = 0.0):
         """供仿真调用: 注入外部传感器数据并运行一帧控制循环
 
         仿真器提供虚拟传感器数据, MissionController 运行完整的
         EKF→安全检查→状态机→控制器→日志→消息总线 流水线。
+
+        telemetry_fresh: 本帧是否真的拿到了**新**遥测。仿真可以注入丢包
+        (见 backend/simulation/transport_model.py) 并传 False —— 此时不得刷新
+        安全心跳, 否则"丢包 → failsafe"这条链在仿真里永远走不通。
+        默认 True 保持既有行为不变。
 
         返回: (control_output, state_dict)
         """
@@ -554,13 +764,22 @@ class MissionController:
         self.current_vel = np.asarray(velocity, dtype=float)
         self.current_attitude = np.asarray(attitude, dtype=float)
 
+        # P1-2 补漏: 这条"外部注入"路径才是仿真/HIL 的传感器来源, 它不经过
+        # _get_sensor_data —— 所以必须在这里表达"本帧是否拿到新遥测"。
+        # 默认 True 保持既有行为; 丢包帧由调用方传 False。
+        self._sensor_fresh = bool(telemetry_fresh)
+        self._telemetry_stale = not bool(telemetry_fresh)
+
         # #5 修复: 仿真路径也更新视频帧, 使 INSPECT 状态的检测管线能跑通
         self._video_frame = self.video_stream.get_frame()
+        self._feed_localization_frame()
 
         # EKF (N6: 仿真传真实加速度, 真机传 None)
         self.ekf.predict(u=self._last_control_accel if self.mock else None)
         if sensor_z is not None:
-            self.ekf.update(np.asarray(sensor_z, dtype=float))
+            # 测量年龄: 延迟到达的测量不应被当作"刚到的新测量"(否则延迟被系统性低估)。
+            # age_s=0 时 EKF 行为与加这个参数之前逐位一致。
+            self.ekf.update(np.asarray(sensor_z, dtype=float), age_s=sensor_age_s)
         ekf_state = self.ekf.get_state()
         self.current_pos = ekf_state["position"]
         self.current_vel = ekf_state["velocity"]
@@ -568,6 +787,11 @@ class MissionController:
 
         # 安全检查 — 记录但不跳过状态机 (EMERGENCY 降落逻辑在状态机内)
         self._check_safety()
+
+        # 审计第 4 条: 任务期**逐帧**有效性检查 (定位/视觉/视频中途失效当场处置)。
+        # 不提前 return: 处置已把状态改成 MISSION_FAILED/EMERGENCY, 紧接着的状态机
+        # 会走终态分支执行安全动作, 同一帧内完成。
+        self._check_task_validity()
 
         # 状态机 (P0-B: compute 已在 _handle_state_machine 中调用一次, 此处复用)
         detections, control_output = self._handle_state_machine(disturbance)
@@ -595,14 +819,281 @@ class MissionController:
         self.target_pos = np.array([x, y, z])
         print("[MAIN] 目标已更新: ({:.0f}, {:.0f}, {:.0f}) cm".format(x, y, z))
 
+    # =========================================================================
+    # 状态转换唯一入口 + 安全闸门 (审计 P0-A)
+    # =========================================================================
+    # 终态 (不参与闸门): 与 backend/mission/states.py 的 TERMINAL_STATES **同源**,
+    # 不再各自维护字符串常量 (审计第 1 条: 枚举与字符串分叉会让转换表校验失效)
+    FAILURE_STATES = tuple(sorted(s.name for s in TERMINAL_STATES))
+    # 依赖"可信位置"的状态: 真机缺少外部定位时禁止进入
+    LOCALIZATION_DEPENDENT_STATES = ("NAVIGATE", "INSPECT", "RETURN")
+    #: 任务期必须**逐帧**检查有效性的状态 (审计第 4 条)
+    VALIDITY_MONITORED_STATES = ("NAVIGATE", "INSPECT", "RETURN")
+    #: 视频连续多久没有新帧即视为冻结
+    VIDEO_STALL_MAX_AGE_S = 2.0
+
+    def height_is_known(self) -> bool:
+        """当前高度是否可信 (真机透传 TelloController 的闸门; 仿真恒为真)。"""
+        if self.mock:
+            return True
+        fn = getattr(self.drone, "height_is_known", None)
+        if not callable(fn):
+            return True
+        try:
+            return bool(fn())
+        except Exception:
+            return False
+
+    def _note_video_frame(self) -> None:
+        """观察视频帧是否在更新。
+
+        get_frame() 有新帧时从队列返回**新对象**, 队列空时回退到缓存的最新帧
+        (同一对象) —— 所以对象身份变化就是"确实收到新帧"的可用判据。
+        """
+        frame = self._video_frame
+        if frame is None:
+            return
+        if frame is not getattr(self, "_video_last_obj", None):
+            self._video_last_obj = frame
+            self._video_last_change_t = time.time()
+            self._video_seen_change = True
+
+    def video_stalled(self, max_age_s: float = None) -> bool:
+        """视频是否已冻结(连续没有新帧)。
+
+        仅在**曾经观察到帧更新**之后才可能为 True: 从未拿到帧由视觉可用性闸门
+        负责, 这里不重复判失败, 避免流启动瞬间误杀任务。
+        """
+        if not getattr(self, "_video_seen_change", False):
+            return False
+        limit = self.VIDEO_STALL_MAX_AGE_S if max_age_s is None else max_age_s
+        last = getattr(self, "_video_last_change_t", None)
+        if last is None:
+            return False
+        return (time.time() - last) > limit
+
+    def _check_task_validity(self) -> bool:
+        """任务期**逐帧**有效性检查 (审计第 4 条)。返回 True 表示本帧已触发处置。
+
+        此前只在"进入状态"时过闸门: 导航到一半定位过期、巡检中视频冻结, 都要等到
+        下一个转换点或巡检超时才暴露 —— 这期间飞机仍在按旧指令继续飞。
+        """
+        if self.state not in self.VALIDITY_MONITORED_STATES:
+            return False
+        self._note_video_frame()
+        problems = []
+        if not self.localization_available():
+            problems.append("LOCALIZATION_LOST_MIDMISSION")
+        if self.state == "INSPECT" and not getattr(self.detector, "is_available", True):
+            problems.append("VISION_LOST_MIDMISSION:{}".format(
+                getattr(self.detector, "unavailable_reason", "unknown")))
+        if self.video_stalled():
+            problems.append("VIDEO_STALLED>{:.0f}s".format(self.VIDEO_STALL_MAX_AGE_S))
+        if not problems:
+            return False
+
+        reason = " + ".join(problems)
+        # (1) 先停水平速度, 不再继续任务输出
+        try:
+            self.drone.stop_velocity()
+        except Exception:
+            pass
+        self._pending_control = np.zeros(3)
+        # (2) 高度不可信 -> 连稳定悬停都无法保证, 直接受控下降;
+        #     否则进终态等待人工处置(不再继续任务, 也不假装成功)。
+        if not self.height_is_known():
+            self._set_state("EMERGENCY", reason + " (高度未知)", force=True)
+            print("[EMERGENCY] 任务期失效且高度未知, 执行受控下降: {}".format(reason))
+        else:
+            self._set_state("MISSION_FAILED", reason, force=True)
+            print("[MISSION_FAILED] 任务期失效: {}".format(reason))
+        return True
+
+    def attach_localization_source(self, source) -> None:
+        """接入外部定位源 (审计 P0-B)。
+
+        与旧 `enable_external_localization("名字")` 的关键区别: 那时只给一个字符串
+        就宣称"有定位了", 闸门形同虚设。现在必须真的接一个能 `read()` 出
+        **带时间戳/质量分数且未过期**观测的源 (见 backend/localization/)。
+        """
+        self._localization_source_obj = source
+        self._localization_source = getattr(source, "name", type(source).__name__)
+        print("[SAFETY] 外部定位源已接入: {}".format(self._localization_source))
+
+    def read_localization(self):
+        """读一次外部定位观测; 不可用则返回 None。
+
+        不可用包括: 未接源 / 读取抛异常 / 观测为 None / 观测自身 is_usable() 为假
+        (时间戳过期、质量低于阈值、位置非有限、未来时间戳)。
+        """
+        src = getattr(self, "_localization_source_obj", None)
+        if src is None:
+            return None
+        try:
+            obs = src.read()
+        except Exception as e:
+            print("[WARN] 定位源读取异常: {}".format(e))
+            return None
+        if obs is None:
+            return None
+        usable = getattr(obs, "is_usable", None)
+        if callable(usable):
+            try:
+                if not usable():
+                    return None
+            except Exception as e:
+                # 定位源自身判定抛异常 = 不可用 (fail-closed)。此前异常会抛穿闸门,
+                # 让状态机拿到一个"看起来没问题"的观测或直接炸掉。
+                print("[WARN] 定位源可用性判定异常, 按不可用处理: {}".format(e))
+                return None
+        return obs
+
+    def _feed_localization_frame(self) -> None:
+        """把当前视频帧喂给**被动推帧式**定位源 (审计第 3 条)。
+
+        ArUcoLocalizationSource 是 read_frame(frame) 推帧式: 不喂帧, read() 永远
+        拿不到新观测 —— 真机上 attach_localization_source() 之后定位根本不会更新,
+        闸门会一直判不可用。这里在每帧取到视频帧后统一推给定位源。
+        没有 read_frame 的源(如注入式真值源)保持原样, 不报错。
+        """
+        src = getattr(self, "_localization_source_obj", None)
+        feeder = getattr(src, "read_frame", None)
+        if src is None or not callable(feeder):
+            return
+        frame = getattr(self, "_video_frame", None)
+        if frame is None:
+            return
+        try:
+            feeder(frame)
+        except Exception as e:
+            print("[WARN] 定位源推帧异常: {}".format(e))
+
+    def localization_available(self) -> bool:
+        """位置观测是否可信 —— 真机必须有**已接入且当前健康**的外部定位源。
+
+        仿真(mock)由物理模型给出真值 -> True;
+        真机默认 False: 光流观测是"上一帧 EKF 估计"的自我循环, 不能作为
+        导航/返航/巡检依据。接入 ArUco/塔筒特征/RTK/UWB/VIO 等真实源后,
+        只有观测**当下可用**才放行 (过期或低质量立即重新变为不可用)。
+        """
+        if self.mock:
+            return True
+        return self.read_localization() is not None
+
+    def _state_gate_reason(self, new_state: str):
+        """返回阻止进入 new_state 的原因; 允许时返回 None。"""
+        if new_state == "INSPECT" and not getattr(self.detector, "is_available", True):
+            return "VISION_UNAVAILABLE: {}".format(
+                getattr(self.detector, "unavailable_reason", "unknown"))
+        if (new_state in self.LOCALIZATION_DEPENDENT_STATES
+                and not self.localization_available()):
+            return ("LOCALIZATION_UNAVAILABLE: 真机缺少外部定位(位置观测为自我循环), "
+                    "禁止进入依赖位置的 {} 状态".format(new_state))
+        return None
+
+    def _set_state(self, new_state: str, reason: str = "", *,
+                   automatic: bool = False, force: bool = False) -> bool:
+        """全系统唯一的状态转换入口。
+
+        - 闸门在这里统一生效, **包括自动转换** —— 此前自动路径直接赋值,
+          可以绕过 request_state() 里的视觉闸门 (审计 P0-A);
+        - automatic=True: 状态机自己推进, 被闸门拦下时进入 MISSION_FAILED 终态,
+          而不是静默留在原地假装任务正常;
+        - automatic=False: 外部请求, 被拦下时保持原状态并返回 False;
+        - force=True: 故障/紧急等必须立即生效的路径。
+        """
+        if not force:
+            blocked = self._state_gate_reason(new_state)
+            if blocked:
+                print("[ERROR] 状态转换被拒绝: {} → {} ({})".format(
+                    self.state, new_state, blocked))
+                if automatic:
+                    self.state = "MISSION_FAILED"
+                    self._mission_failed_reason = "{} (目标状态 {})".format(
+                        blocked, new_state)
+                    self._state_entry_time = time.time()
+                    print("[MISSION_FAILED] {}".format(self._mission_failed_reason))
+                return False
+
+        self.state = new_state
+        self._state_entry_time = time.time()
+        if new_state not in self.FAILURE_STATES and new_state != "EMERGENCY":
+            self._mission_failed_reason = None
+        return True
+
+    def mark_fault(self, reason: str) -> None:
+        """进入 FAULT 终态 (控制循环/硬件异常)。
+
+        审计第 2 条: **光停速度不等于安全**。异常发生时飞机还在空中, 只停 RC 指令
+        只会让它悬停/漂移, 甚至依赖 Tello 自己的超时。所以这里:
+          1) 先停速度(切断任务逻辑输出);
+          2) 若仍在上空 -> 立即发起**受控下降**(优先 emergency_descent, 否则 land),
+             并置 `_fault_descent_started`; 每帧的 FAULT 分支持续推进直到触地;
+          3) 无法下降时打印明确告警(需要飞控级 failsafe / 外部急停)。
+        """
+        stop = getattr(self.drone, "stop_velocity", None)
+        if callable(stop):
+            try:
+                stop()
+            except Exception:
+                pass
+        self._fault_reason = reason
+        self._fault_descent_started = False
+
+        flying = bool(getattr(self.drone, "is_flying", False))
+        if flying:
+            descent = getattr(self.drone, "emergency_descent", None)
+            land = getattr(self.drone, "land", None)
+            try:
+                if callable(descent):
+                    descent(timeout_s=0.1, poll_s=0.0, release_velocity=False)
+                    self._fault_descent_started = True
+                elif callable(land):
+                    land()
+                    self._fault_descent_started = True
+            except TypeError:
+                try:
+                    descent()          # 不支持上述关键字的实现
+                    self._fault_descent_started = True
+                except Exception as e:
+                    print("[FAULT] 受控下降调用失败: {}".format(e))
+            except Exception as e:
+                print("[FAULT] 受控下降调用失败: {}".format(e))
+            if not self._fault_descent_started:
+                print("[FAULT] !! 无法发起受控下降: 需要飞控级 failsafe 或外部急停")
+
+        self._set_state("FAULT", reason, force=True)
+        print("[FAULT] {} (空中={}, 受控下降={})".format(
+            reason, flying, self._fault_descent_started))
+
+    def clear_fault(self, reason: str = "人工复位") -> bool:
+        """**唯一**离开 FAULT/MISSION_FAILED 终态的入口 (审计第 1 条)。
+
+        安全约束: 只允许在**未起飞**时复位 —— 空中不允许一键把终态清成 IDLE,
+        否则就是绕过安全设计。空中应当先完成受控下降。
+        """
+        if self.state not in self.FAILURE_STATES:
+            print("[WARN] 当前状态 {} 不是终态, 无需复位".format(self.state))
+            return False
+        if bool(getattr(self.drone, "is_flying", False)):
+            print("[ERROR] 拒绝在飞行中复位终态: 请先完成受控下降再复位")
+            return False
+        prev = self.state
+        self._fault_reason = None
+        self._mission_failed_reason = None
+        self._fault_descent_started = False
+        self.state = "IDLE"
+        self._state_entry_time = time.time()
+        print("[MAIN] 终态复位: {} → IDLE ({})".format(prev, reason))
+        return True
+
     def takeoff(self, height: float = 100.0):
         """起飞到指定高度 (cm)"""
         if self.state != "IDLE":
             print("[WARN] 当前状态 {} 不允许起飞".format(self.state))
             return False
         self.target_pos = np.array([0.0, 0.0, height])
-        self.state = "TAKEOFF"
-        self._state_entry_time = time.time()
+        self._set_state("TAKEOFF", "起飞指令")
         print("[MAIN] 起飞指令, 目标高度={:.0f}cm".format(height))
         return True
 
@@ -617,33 +1108,45 @@ class MissionController:
                 "[MAIN] 路径规划成功, {} 个路径点".format(len(self.path))
             )
             if self.state in ("HOVERING", "IDLE"):
-                self.state = "NAVIGATE"
+                # 无外部定位时拒绝进入 NAVIGATE (返回 False, 不做假成功)
+                return self._set_state("NAVIGATE", "路径规划完成")
             return True
         print("[MAIN] 路径规划失败")
         return False
 
     def trigger_emergency(self, reason: str):
-        """触发紧急状态 (直接进入 EMERGENCY, 不经过转换表校验)"""
+        """触发紧急状态 (直接进入 EMERGENCY, 不经过闸门)"""
         self._emergency_reason = reason
-        self.state = "EMERGENCY"
         self._emergency_sent = False  # P0-1: 重新武装受控降落
-        self._state_entry_time = time.time()
+        self._set_state("EMERGENCY", reason, force=True)
         print("[EMERGENCY] {}".format(reason))
 
     def request_state(self, new_state: str, reason: str = "") -> bool:
-        """P1-C/3.3: 通过转换表校验后变更状态, 非法转换返回 False"""
+        """外部请求状态转换。
+
+        审计 P0-A: 闸门已统一收口到 _set_state —— 视觉不可用拒绝 INSPECT、
+        真机无外部定位拒绝 NAVIGATE/INSPECT/RETURN, 手工与自动路径走同一套。
+        这里只保留"手工请求"的转换表校验语义。
+        """
         try:
             cur = MissionState[self.state]
-            nxt = MissionState[new_state]
-            if not can_transition(cur, nxt):
-                print("[WARN] 非法状态转换: {} → {} ({})".format(
-                    self.state, new_state, reason))
-                return False
         except KeyError:
-            pass  # 未知状态允许直接设置 (兼容旧代码)
-        self.state = new_state
-        self._state_entry_time = time.time()
-        return True
+            # 审计第 1 条: 这里原本是 `except KeyError: pass`(兼容旧代码), 后果是
+            # **整张转换表被跳过** —— 实测在 FAULT 状态下 request_state("TAKEOFF")
+            # 返回 True 并真的复活起飞。现在起点不在权威枚举里 -> fail-closed 拒绝。
+            print("[ERROR] 状态转换被拒绝: 当前状态 {!r} 不在 MissionState 枚举内 "
+                  "(终态必须用 clear_fault() 人工复位)".format(self.state))
+            return False
+        try:
+            nxt = MissionState[new_state]
+        except KeyError:
+            print("[ERROR] 状态转换被拒绝: 目标状态 {!r} 不是合法任务状态".format(new_state))
+            return False
+        if not can_transition(cur, nxt):
+            print("[WARN] 非法状态转换: {} → {} ({})".format(
+                self.state, new_state, reason))
+            return False
+        return self._set_state(new_state, reason)
 
     def stop(self):
         """优雅关闭 (P1-11): 降落→轮询触地→保存日志→停止线程→关闭连接
@@ -666,13 +1169,34 @@ class MissionController:
                 if not self.drone.is_flying or (h < 20):
                     break
                 time.sleep(0.1)
-            # 超时仍未触地 -> 升级硬停桨(仅作为最后手段; kill() 内部会判断近地面)
+            # 超时仍未触地 -> 按 P0-D 收紧后的规则处理。
+            # kill()/motor_cutoff 现在只在"高度已知且 <=30cm"时才真正停桨, 高空调用
+            # 会被**拒绝**。所以这里改为: 先做受控紧急下降, 再尝试停桨; 被拒时明确
+            # 报告"需要外部急停/飞控级 failsafe", 而不是盲目砍桨造成空中自由落体。
             if self.drone.is_flying:
-                print("[WARN] 降落超时, 执行硬停桨")
-                self.drone.kill()
+                descent = getattr(self.drone, "emergency_descent", None)
+                if callable(descent):
+                    print("[WARN] 降落超时 -> 受控紧急下降 (绝不盲目停桨)")
+                    try:
+                        descent(timeout_s=2.0, release_velocity=False)
+                    except TypeError:
+                        descent()
+                cutoff = getattr(self.drone, "motor_cutoff", None)
+                if callable(cutoff):
+                    if not cutoff("touchdown_after_timeout"):
+                        print("[WARN] 停桨被拒(高度未知或仍偏高) —— "
+                              "需要外部急停或飞控级 failsafe")
+                else:
+                    self.drone.kill()
 
         # 2. 停止主循环
         self._running = False
+
+        # 2b. P0-2: 停止 RC 速度发送线程并归零速度。
+        # 不释放的话, 20Hz 线程会在主循环退出后继续下发最后一条速度指令。
+        release = getattr(self.drone, "release", None)
+        if callable(release):
+            release()
 
         # 3. 停止视频流线程
         self.video_stream.stop()
@@ -757,6 +1281,32 @@ class MissionController:
             "detection_count": self._last_detection_count,
             "emergency_reason": self._emergency_reason,
             "ekf_mahalanobis": float(self.ekf.mahalanobis_distance),
+            # P1-3: 暴露"系统是否真的具备感知/硬件能力", 供 Dashboard 与日志判定,
+            # 避免故障被误读为正常运行。
+            "vision_status": getattr(self.detector, "status", "UNKNOWN"),
+            "vision_reason": getattr(self.detector, "unavailable_reason", None),
+            "hardware_fault": getattr(self, "_hardware_fault", None),
+            # 审计 P0-A / P0-B / P0-C: 终态与能力必须可观测
+            "fault_reason": getattr(self, "_fault_reason", None),
+            "mission_failed_reason": getattr(self, "_mission_failed_reason", None),
+            "localization_available": self.localization_available(),
+            "localization_source": getattr(self, "_localization_source", None),
+            # P0-B: 定位观测的质量与新鲜度必须可观测(便于判定"能不能用")
+            "localization_quality": (
+                float(self._last_localization.quality)
+                if getattr(self, "_last_localization", None) is not None else None),
+            "localization_age_s": (
+                float(self._last_localization.age())
+                if getattr(self, "_last_localization", None) is not None else None),
+            "telemetry_fresh": (self.drone.has_fresh_telemetry(1.0)
+                                if hasattr(self.drone, "has_fresh_telemetry") else None),
+            # 审计 §14.4: 遥测陈旧必须可观测(否则"估计被冻住"看起来一切正常)
+            "telemetry_stale": bool(getattr(self, "_telemetry_stale", False)),
+            # 审计第 5 条: 分通道新鲜度, 不让"不同时刻的观测"伪装成一包同步测量
+            "localization_fresh": getattr(self, "_localization_fresh", None),
+            "barometer_fresh": getattr(self, "_barometer_fresh", None),
+            "video_stalled": self.video_stalled(),
+            "measurement_age_s": getattr(self.ekf, "last_measurement_age_s", None),
         }
 
 

@@ -59,7 +59,7 @@ class IntegralSeparator:
 
 
 def apply_integral_separation(error: np.ndarray, integral: np.ndarray,
-                               threshold: float = 50.0) -> np.ndarray:
+                              threshold: float = 50.0) -> np.ndarray:
     """对3维误差向量应用积分分离
 
     返回: 分离后的积分项 (冻结位置的对应分量为0)

@@ -14,7 +14,7 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Any, Dict, Optional
+from typing import Optional
 
 
 class SafetyLevel(Enum):
@@ -50,15 +50,15 @@ class FailsafeMonitor:
 
     # 三级阈值 (优先级: KILL > LAND > WARN)
     THRESHOLDS = {
-        "battery_warn":  20,   # %  — 低于此值 WARN
-        "battery_land":  10,   # %  — 低于此值 LAND
-        "battery_kill":   5,   # %  — 低于此值 KILL
+        "battery_warn": 20,   # %  — 低于此值 WARN
+        "battery_land": 10,   # %  — 低于此值 LAND
+        "battery_kill": 5,   # %  — 低于此值 KILL
         "attitude_land": 30,   # 度 — 超过此值 LAND
         "attitude_kill": 60,   # 度 — 超过此值 KILL
-        "height_land":   300,  # cm — 超过此值 LAND
-        "height_kill":   500,  # cm — 超过此值 KILL
-        "timeout_land":   1.0, # s  — 心跳超时 LAND
-        "timeout_kill":   3.0, # s  — 心跳超时 KILL
+        "height_land": 300,  # cm — 超过此值 LAND
+        "height_kill": 500,  # cm — 超过此值 KILL
+        "timeout_land": 1.0,  # s  — 心跳超时 LAND
+        "timeout_kill": 3.0,  # s  — 心跳超时 KILL
     }
 
     def __init__(self):
@@ -96,33 +96,33 @@ class FailsafeMonitor:
         # KILL 级别
         if battery < self.THRESHOLDS["battery_kill"]:
             event = SafetyEvent(SafetyLevel.KILL,
-                "电量危急: {}% < {}%".format(battery, self.THRESHOLDS["battery_kill"]))
+                                "电量危急: {}% < {}%".format(battery, self.THRESHOLDS["battery_kill"]))
         elif max_att > self.THRESHOLDS["attitude_kill"]:
             event = SafetyEvent(SafetyLevel.KILL,
-                "姿态危急: {:.0f}° > {:.0f}°".format(max_att, self.THRESHOLDS["attitude_kill"]))
+                                "姿态危急: {:.0f}° > {:.0f}°".format(max_att, self.THRESHOLDS["attitude_kill"]))
         elif height > self.THRESHOLDS["height_kill"]:
             event = SafetyEvent(SafetyLevel.KILL,
-                "高度危急: {:.0f}cm > {:.0f}cm".format(height, self.THRESHOLDS["height_kill"]))
+                                "高度危急: {:.0f}cm > {:.0f}cm".format(height, self.THRESHOLDS["height_kill"]))
         elif elapsed > self.THRESHOLDS["timeout_kill"]:
             event = SafetyEvent(SafetyLevel.KILL,
-                "通信中断: {:.1f}s > {:.1f}s".format(elapsed, self.THRESHOLDS["timeout_kill"]))
+                                "通信中断: {:.1f}s > {:.1f}s".format(elapsed, self.THRESHOLDS["timeout_kill"]))
         # LAND 级别
         elif battery < self.THRESHOLDS["battery_land"]:
             event = SafetyEvent(SafetyLevel.LAND,
-                "低电量: {}% < {}%".format(battery, self.THRESHOLDS["battery_land"]))
+                                "低电量: {}% < {}%".format(battery, self.THRESHOLDS["battery_land"]))
         elif max_att > self.THRESHOLDS["attitude_land"]:
             event = SafetyEvent(SafetyLevel.LAND,
-                "姿态异常: {:.0f}° > {:.0f}°".format(max_att, self.THRESHOLDS["attitude_land"]))
+                                "姿态异常: {:.0f}° > {:.0f}°".format(max_att, self.THRESHOLDS["attitude_land"]))
         elif height > self.THRESHOLDS["height_land"]:
             event = SafetyEvent(SafetyLevel.LAND,
-                "高度超限: {:.0f}cm > {:.0f}cm".format(height, self.THRESHOLDS["height_land"]))
+                                "高度超限: {:.0f}cm > {:.0f}cm".format(height, self.THRESHOLDS["height_land"]))
         elif elapsed > self.THRESHOLDS["timeout_land"]:
             event = SafetyEvent(SafetyLevel.LAND,
-                "通信延迟: {:.1f}s > {:.1f}s".format(elapsed, self.THRESHOLDS["timeout_land"]))
+                                "通信延迟: {:.1f}s > {:.1f}s".format(elapsed, self.THRESHOLDS["timeout_land"]))
         # WARN 级别
         elif battery < self.THRESHOLDS["battery_warn"]:
             event = SafetyEvent(SafetyLevel.WARN,
-                "电量偏低: {}% < {}%".format(battery, self.THRESHOLDS["battery_warn"]))
+                                "电量偏低: {}% < {}%".format(battery, self.THRESHOLDS["battery_warn"]))
 
         self._active_event = event
         if event.level != SafetyLevel.OK:

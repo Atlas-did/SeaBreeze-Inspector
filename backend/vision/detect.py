@@ -1,10 +1,12 @@
 """
-缺陷检测推理 — 基于YOLOv8-Nano
+缺陷检测推理 — 训练线为 YOLO11s (`backend/vision/train.py` 的 DEFAULT_MODEL)。
+
+部署权重以 `config/yolo_config.yaml` 为**权威**（由 scripts/check_deployment_config.py
+校验存在性与 SHA256）；其 provenance 尚未登记，见 README 的"模型状态"说明。
 """
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Dict, List, Optional
 
 import cv2
@@ -44,7 +46,10 @@ class DefectDetector:
                     device = str(ycfg["model"]["device"])
             except Exception:
                 if model_path is None:
-                    model_path = "data/weights/yolov8n.pt"
+                    # 读配置失败时的最后兜底: 与部署配置里的权重**同名**, 而不是一个
+                    # 并不存在的历史路径(yolov8n.pt)。权重缺失时 P1-3 的 fail-closed
+                    # 会让检测器进入 VISION_UNAVAILABLE, 不会静默降级。
+                    model_path = "data/weights/seabreeze_v3.pt"
                 if conf_threshold is None:
                     conf_threshold = 0.45
                 if device is None:
@@ -52,7 +57,15 @@ class DefectDetector:
         self.model_path = model_path
         self.conf_threshold = conf_threshold
         self.device = device
-        self.mock = mock
+        # P1-3: 显式区分三种状态, 绝不再"加载失败就悄悄变 mock":
+        #   OK                  = 模型已加载, 正常推理
+        #   MOCK                = 调用方**显式**要求模拟(仅用于 UI/演示)
+        #   VISION_UNAVAILABLE  = 模型不可用(加载失败/连续推理异常) —— 必须显式暴露
+        self.status = "MOCK" if mock else "OK"
+        self.unavailable_reason: Optional[str] = None
+        self.inference_errors = 0
+        self.max_inference_errors = 5
+        self.mock = mock            # 向后兼容: 仅表示"调用方显式要求 mock"
         self.model = None
 
         if not mock:
@@ -61,16 +74,30 @@ class DefectDetector:
                 self.model = YOLO(model_path)
                 print(f"[OK] YOLO模型已加载: {model_path}")
             except Exception as e:
-                print(f"[WARN] YOLO加载失败, 切换到模拟模式: {e}")
-                self.mock = True
+                # P1-3: 不再降级为 mock —— 故障必须可见, 检测结果宁可为空
+                self.model = None
+                self.status = "VISION_UNAVAILABLE"
+                self.unavailable_reason = "模型加载失败: {}".format(e)
+                print("[ERROR] VISION_UNAVAILABLE: YOLO模型加载失败: {} "
+                      "(不会退化为 mock; 检测结果将为空)".format(e))
+
+    @property
+    def is_available(self) -> bool:
+        """检测能力是否可用。MOCK 也算可用(它是显式选择的模式);
+        只有 VISION_UNAVAILABLE 表示"真的没有检测能力"。"""
+        return self.status != "VISION_UNAVAILABLE"
 
     def detect(self, image: np.ndarray) -> List[Dict]:
         """检测单帧图像, 返回检测框列表
 
-        异常保护: 若 ultralytics 推理或结果解析抛异常, 自动退化为 mock 模式,
-        记录完整 traceback 并返回空列表, 不中断主循环。
+        P1-3: 任何故障都不再"自动退化为 mock"。
+        - status == VISION_UNAVAILABLE: 直接返回空列表(原因在 status/unavailable_reason 暴露);
+        - 连续推理/解析异常达到 max_inference_errors 次后转为 VISION_UNAVAILABLE;
+        - 成功一帧即把连续错误计数清零。
         """
         if image is None or not hasattr(image, "shape") or image.size == 0:
+            return []
+        if self.status == "VISION_UNAVAILABLE":
             return []
         if self.mock:
             return self._mock_detect(image)
@@ -78,11 +105,8 @@ class DefectDetector:
         try:
             results = self.model(image, conf=self.conf_threshold, device=self.device, verbose=False)
         except Exception as e:
-            import traceback
-            print("[DETECT] ultralytics 推理失败, 切换为 mock 模式: {}".format(e))
-            traceback.print_exc()
-            self.mock = True
-            return self._mock_detect(image)
+            self._on_inference_failure("推理", e)
+            return []
 
         detections = []
         try:
@@ -102,13 +126,24 @@ class DefectDetector:
                         "severity": self._estimate_severity(conf),
                     })
         except Exception as e:
-            import traceback
-            print("[DETECT] 结果解析失败, 切换为 mock 模式: {}".format(e))
-            traceback.print_exc()
-            self.mock = True
-            return self._mock_detect(image)
+            self._on_inference_failure("结果解析", e)
+            return []
 
+        self.inference_errors = 0
         return detections
+
+    def _on_inference_failure(self, stage: str, exc: Exception) -> None:
+        """P1-3: 记录连续推理失败; 达到阈值即标记 VISION_UNAVAILABLE(不再降级为 mock)。"""
+        import traceback
+        self.inference_errors += 1
+        print("[ERROR] 检测{}失败 (第 {}/{} 次): {}".format(
+            stage, self.inference_errors, self.max_inference_errors, exc))
+        traceback.print_exc()
+        if self.inference_errors >= self.max_inference_errors:
+            self.status = "VISION_UNAVAILABLE"
+            self.unavailable_reason = "{}连续失败 {} 次: {}".format(
+                stage, self.inference_errors, exc)
+            print("[ERROR] VISION_UNAVAILABLE: {}".format(self.unavailable_reason))
 
     def _mock_detect(self, image: np.ndarray) -> List[Dict]:
         """模拟检测: 在图像上随机生成检测框 (P1-F: 用帧hash确保不同帧结果不同)"""
@@ -172,6 +207,13 @@ class MockBladeDefectDetector(DefectDetector):
         self.device = device
         self.model = None
         self.mock = True
+        # P1-3: 与 DefectDetector 保持同一套状态字段。
+        # MOCK 是"调用方显式选择的模式", 不等于 VISION_UNAVAILABLE。
+        self.status = "MOCK"
+        self.unavailable_reason = None
+        self.inference_errors = 0
+        self.max_inference_errors = 5
+        self.model_path = "<mock>"
         self.DEFECT_NAMES = {0: "crack", 1: "corrosion", 2: "leading_edge_damage"}
         self.DEFECT_COLORS = {
             "crack": (0, 0, 255),

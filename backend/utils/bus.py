@@ -133,11 +133,9 @@ class MessageBus:
 
     def start(self) -> None:
         """兼容旧接口 (pub-sub 模式下无需显式启动)"""
-        pass
 
     def stop(self) -> None:
         """停止总线 (pub-sub 模式下无需显式停止)"""
-        pass
 
 
 def create_message_bus() -> MessageBus:

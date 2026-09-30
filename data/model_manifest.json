@@ -1,0 +1,72 @@
+{
+  "manifest_type": "model",
+  "schema_version": 1,
+  "generated_at": "2026-09-30T08:24:41Z",
+  "generator": "scripts/make_manifest.py",
+  "weights_dir": "data/weights",
+  "weights_dir_exists": true,
+  "digest": {
+    "algorithm": "sha256",
+    "scope": "file-bytes"
+  },
+  "ignored": [
+    {
+      "path": "data/weights/.ci-placeholder.pt",
+      "reason": "dotfile-placeholder"
+    },
+    {
+      "path": "data/weights/.gitkeep",
+      "reason": "dotfile-placeholder"
+    },
+    {
+      "path": "data/weights/best.onnx",
+      "reason": "not-a-.pt-file"
+    },
+    {
+      "path": "data/weights/best.torchscript",
+      "reason": "not-a-.pt-file"
+    }
+  ],
+  "models": [
+    {
+      "path": "data/weights/seabreeze_best.pt",
+      "file": "seabreeze_best.pt",
+      "bytes": 6264490,
+      "mtime_ns": 1784965070522306400,
+      "mtime_utc": "2026-07-25T07:37:50Z",
+      "sha256": "e8ff2dc5b0a5386f2271f33e2f404a91f444ad6ad30dce403f432bc022912f0b",
+      "training": null,
+      "eval": null
+    },
+    {
+      "path": "data/weights/seabreeze_full.pt",
+      "file": "seabreeze_full.pt",
+      "bytes": 6168632,
+      "mtime_ns": 1786169611386964400,
+      "mtime_utc": "2026-08-08T06:13:31Z",
+      "sha256": "09c2834e01e0536bb42942f5749548141851640b72deed6c3f04a8bb44726913",
+      "training": null,
+      "eval": null
+    },
+    {
+      "path": "data/weights/seabreeze_v2_quick.pt",
+      "file": "seabreeze_v2_quick.pt",
+      "bytes": 6122716,
+      "mtime_ns": 1786159994658003500,
+      "mtime_utc": "2026-08-08T03:33:14Z",
+      "sha256": "d0f7296c9101b5e044b361baa9417f712ed5d1b778be25ffa7071bcb5bba943c",
+      "training": null,
+      "eval": null
+    },
+    {
+      "path": "data/weights/seabreeze_v3.pt",
+      "file": "seabreeze_v3.pt",
+      "bytes": 6435114,
+      "mtime_ns": 1786227724708515000,
+      "mtime_utc": "2026-08-08T22:22:04Z",
+      "sha256": "4b83f1f1739202ad099db83c6f35067c17bc2c3d004eb439ec0dba9390575b82",
+      "training": null,
+      "eval": null
+    }
+  ]
+}

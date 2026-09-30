@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """HAL contract tests - verify DroneInterface/ArmInterface implementations."""
 
-import sys, numpy as np
+import sys
+
+import numpy as np
 from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
 import pytest
-from backend.hal.interfaces import DroneInterface, ArmInterface, VisionInterface
+from backend.hal.interfaces import DroneInterface, ArmInterface
 from backend.simulation.models import Quadrotor3D, RobotArm3DOF
 from backend.simulation.drone_adapter import SimDroneAdapter
 
@@ -51,7 +53,7 @@ class TestDroneInterfaceContract:
         assert drone.is_flying is True, "emergency() should NOT instantly clear is_flying"
         drone.mark_landed()
         assert drone.is_flying is False
-    
+
     def test_move_to_requires_flying(self, drone):
         drone.connect()
         assert drone.move_to(0, 0, 10) is False
