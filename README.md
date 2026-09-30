@@ -14,7 +14,7 @@ This project proposes an intelligent inspection solution combining a UAV with a 
 - **Disturbance Observer (12-state EKF)** — estimates and compensates for wind disturbances
 - **Feedforward PID Controller** — disturbance-aware position control
 - **RRT\* Path Planning** — 3D obstacle-aware trajectory generation
-- **YOLOv8-Nano Defect Detection** — real-time crack/corrosion/damage detection
+- **Defect Detection (YOLO11s training line)** — real-time crack/corrosion/damage detection
 
 ## Tech Stack
 
@@ -23,10 +23,17 @@ This project proposes an intelligent inspection solution combining a UAV with a 
 | UAV Platform | DJI Tello (via [DJITelloPy](https://github.com/damiafuentes/DJITelloPy)) |
 | Robotic Arm | 3-DOF SG90 servos + 3D-printed structure |
 | MCU | Arduino Nano (CH340) + PCA9685 servo driver |
-| Algorithms | 12D-EKF, PID+Feedforward, RRT\*, YOLOv8-Nano |
+| Algorithms | 12D-EKF, PID+Feedforward, RRT\*, YOLO11s (detector) |
 | Simulation | Pygame + Three.js 3D visualization |
 | Frontend | Tkinter dashboard (monitor-only) + Web 3D (main demo) |
 | Language | Python 3.10+ |
+
+> **模型状态（诚实标注，勿据此宣称可复现）**：训练线是 **YOLO11s**
+> （`backend/vision/train.py` 的 `DEFAULT_MODEL`）；而 `config/yolo_config.yaml`
+> 当前指向的是**历史权重** `seabreeze_v3.pt`，其训练/评估 provenance 尚未登记
+> （`data/model_manifest.json` 的 `training` / `eval` 仍为 null）。
+> 该配置已由 `scripts/check_deployment_config.py` 把关（权重必须存在且 SHA256 对得上），
+> 但在 provenance 补齐前，**它不是一个可复现的发布候选**。
 
 ## Quick Start
 
