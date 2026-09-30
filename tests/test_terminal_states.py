@@ -10,6 +10,7 @@
 """
 
 import sys
+import time
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -293,3 +294,158 @@ def test_fresh_localization_and_fresh_barometer_are_both_used():
     obs = mc._get_sensor_data()
     assert obs is not None
     assert obs[3] == pytest.approx(123.0) and obs[4] == pytest.approx(-45.0)
+
+
+# =============================================================================
+# 7) 第三轮审计 P0: 终态闩锁 —— 安全检查不得成为第二条出口
+# =============================================================================
+
+def test_terminal_latch_survives_safety_escalation():
+    """KILL 事件可以把 FAULT 升级为 EMERGENCY(安全动作仍要做), 但**不得解锁终态**。"""
+    mc = _mc(mock=False)
+    drone = FakeDrone(flying=True)
+    mc.drone = drone
+    mc.mark_fault("注入故障")
+    assert mc._terminal_latched is True
+
+    mc.trigger_emergency("KILL 级安全事件")          # 安全升级: 允许
+    assert mc.state == "EMERGENCY"
+
+    # 任何"离开终态"的转换都必须被拒 —— 包括 force=True
+    assert mc._set_state("IDLE", "想偷偷复位", force=True) is False
+    assert mc.state == "EMERGENCY"
+    assert mc.request_state("TAKEOFF", "外部请求") is False
+    assert mc.state == "EMERGENCY"
+
+
+def test_terminal_latch_blocks_emergency_to_idle_recovery():
+    """EMERGENCY 降落后的 IDLE 恢复路径也不得绕过 clear_fault()。"""
+    mc = _mc(mock=False)
+    drone = FakeDrone(flying=True, height_known=True)
+    mc.drone = drone
+    mc.mark_fault("故障")
+    mc.trigger_emergency("安全升级")
+    drone.is_flying = False                          # 已落地
+    for _ in range(3):
+        mc._handle_state_machine(np.zeros(3))        # 状态机尝试收尾
+    assert mc.state != "IDLE", "落地后自行回到 IDLE, 绕过了人工复位"
+    assert mc._terminal_latched is True
+
+    assert mc.clear_fault("人工复位") is True         # 唯一出口仍然可用
+    assert mc.state == "IDLE" and mc._terminal_latched is False
+
+
+# =============================================================================
+# 8) 第三轮审计 P0: FAULT 下降必须是闭环(返回值 + 收尾降落)
+# =============================================================================
+
+class _FailingDescentDrone(FakeDrone):
+    """emergency_descent 返回 False(表示"没有下降能力")的假机体。"""
+
+    def emergency_descent(self, *a, **kw):
+        self.calls.append("emergency_descent")
+        return False
+
+
+class _LowDrone(FakeDrone):
+    """已确认低空(<=30cm)的假机体。"""
+
+    def get_height(self):
+        return 10
+
+
+def test_fault_descent_failure_is_escalated_not_ignored():
+    """emergency_descent 返回 False 时必须显式升级, 不能假装在下降。"""
+    mc = _mc(mock=False)
+    drone = _FailingDescentDrone(flying=True, height_known=True)
+    mc.drone = drone
+    mc.mark_fault("故障")
+    assert mc._fault_descent_started is False
+    assert mc._fault_descent_failures >= 1, "下降失败必须被计数/告警"
+
+    before = mc._fault_descent_failures
+    for _ in range(3):
+        mc._handle_state_machine(np.zeros(3))
+    assert mc._fault_descent_failures > before, "终态期间应持续察觉下降未推进"
+
+
+def test_fault_descent_lands_when_low_altitude_confirmed():
+    """确认低空后必须调 land() 收尾 —— emergency_descent 自己不会 land。"""
+    mc = _mc(mock=False)
+    drone = _LowDrone(flying=True, height_known=True)
+    mc.drone = drone
+    mc.mark_fault("故障")
+    drone.calls.clear()
+    for _ in range(3):
+        mc._handle_state_machine(np.zeros(3))
+    assert drone.calls.count("land") == 1, "低空确认后应请求降落收尾一次, 实际 {}".format(drone.calls)
+
+
+def test_fault_descent_stops_issuing_after_touchdown():
+    """彻底落地后不再继续下发下降/降落指令。"""
+    mc = _mc(mock=False)
+    drone = _LowDrone(flying=False, height_known=True)
+    mc.drone = drone
+    mc.mark_fault("故障")
+    drone.calls.clear()
+    for _ in range(5):
+        mc._handle_state_machine(np.zeros(3))
+    assert drone.calls == [], "未起飞/已落地时不应再下发任何动作, 实际 {}".format(drone.calls)
+
+
+# =============================================================================
+# 9) 第三轮审计 P1: 零视频帧也是"视频不可用"
+# =============================================================================
+
+def test_zero_video_frames_eventually_count_as_stalled():
+    """从未拿到任何帧时, 冻结检测必须能触发(否则 INSPECT 白等到超时当成功)。"""
+    mc = _mc(mock=False)
+    mc.drone = FakeDrone(flying=True)
+    mc.attach_localization_source(_FixedSource([0.0, 0.0, 100.0]))   # 定位独立可用
+    mc.state = "INSPECT"
+    mc._video_frame = None
+
+    mc._state_entry_time = time.time()               # 刚进入 -> 不判失效
+    assert mc.video_stalled() is False
+
+    mc._state_entry_time = time.time() - (mc.VIDEO_STALL_MAX_AGE_S + 1.0)
+    assert mc.video_stalled() is True, "零视频帧超时后必须判为视频不可用"
+
+
+def test_zero_video_frames_fail_the_inspection_midmission():
+    """零视频帧的 INSPECT 必须 MISSION_FAILED(且原因可读)。"""
+    mc = _mc(mock=False)
+    drone = FakeDrone(flying=True, height_known=True)
+    mc.drone = drone
+    mc.attach_localization_source(_FixedSource([0.0, 0.0, 100.0]))
+    mc.state = "INSPECT"
+    mc._video_frame = None
+    mc._state_entry_time = time.time() - (mc.VIDEO_STALL_MAX_AGE_S + 1.0)
+
+    assert mc._check_task_validity() is True
+    assert mc.state == "MISSION_FAILED"
+    assert "VIDEO_STALLED" in (mc.get_state_dict().get("mission_failed_reason") or "")
+
+
+# =============================================================================
+# 10) 第三轮审计 P1: 真机高度能力必须 fail-closed
+# =============================================================================
+
+class _NoHeightProbeDrone(FakeDrone):
+    """没实现 height_is_known() 的真机适配器(契约不符)。"""
+
+    height_is_known = None
+
+
+def test_missing_height_probe_is_fail_closed():
+    """适配器不提供 height_is_known() 时按"高度不可信"处理, 而不是默认可信。"""
+    mc = _mc(mock=False)
+    mc.drone = _NoHeightProbeDrone(flying=True)
+    assert mc.height_is_known() is False
+    assert mc._safe_height_cm() is None
+
+
+def test_simulation_height_is_trusted():
+    """仿真由物理模型给出高度, 恒为可信(此改动不影响仿真路径)。"""
+    mc = _mc(mock=True)
+    assert mc.height_is_known() is True

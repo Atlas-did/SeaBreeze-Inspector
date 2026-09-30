@@ -18,18 +18,37 @@
 
 ## 逐项结果
 
+> **两类必须分开做、分开记**：A 类不触发飞行原语（**电机不应转动**）；B 类会转动电机
+> （桨叶必须已拆除、机体固定、人离开旋翼平面）。
+
+### L1-A 纯指令路由 / 闸门类（电机不应转动）
+
 | # | 项 | 期望 | 实测 | 结果 |
 |---|---|---|---|---|
-| 1 | 不接 Tello 启动 | `HARDWARE_FAULT`，任务不启动，**不降级为模拟** | | ☐通过 ☐失败 ☐未测 |
-| 2 | 权重路径改为不存在 | `vision_status=VISION_UNAVAILABLE`；`request_state("INSPECT")` 被拒 | | ☐ ☐ ☐ |
-| 3 | 不接外部定位 | `localization_available()=False`；NAVIGATE/INSPECT/RETURN 全被拒 | | ☐ ☐ ☐ |
-| 4 | `set_velocity` | 底层确收到 `send_rc_control`（贴日志片段） | | ☐ ☐ ☐ |
-| 5 | 高度未知时 `kill()` | **拒绝**执行 + 明确错误；状态不变 | | ☐ ☐ ☐ |
-| 6 | 高度 ≤30cm 时 `kill()` | 允许执行 | | ☐ ☐ ☐ |
-| 7 | 断开 Tello Wi-Fi | `telemetry_fresh=False`；在 timeout_land/kill 内触发保护 | | ☐ ☐ ☐ |
-| 8 | 机械臂 `capabilities()` | 如实（无位置反馈/无电流/无堵转） | | ☐ ☐ ☐ |
-| 9 | 拔掉机械臂串口后下发角度 | 返回 **False**（不得假成功） | | ☐ ☐ ☐ |
-| 10 | ACK 开启（`wait_ack=True`） | 收到固件 ACK 才 True；不回则超时 False | | ☐ ☐ ☐ |
+| A1 | 不接 Tello 启动 | `HARDWARE_FAULT`，任务不启动，**不降级为模拟** | | ☐通过 ☐失败 ☐未测 |
+| A2 | 权重路径改为不存在 | `vision_status=VISION_UNAVAILABLE`；`request_state("INSPECT")` 被拒 | | ☐ ☐ ☐ |
+| A3 | 不接外部定位 | `localization_available()=False`；NAVIGATE/INSPECT/RETURN 全被拒 | | ☐ ☐ ☐ |
+| A4 | `set_velocity` | 底层确收到 `send_rc_control`（贴日志片段） | | ☐ ☐ ☐ |
+| A5 | 高度未知时 `kill()` | **拒绝**执行 + 明确错误；状态不变 | | ☐ ☐ ☐ |
+| A6 | 断开 Tello Wi-Fi | `telemetry_fresh=False`；在 timeout_land/kill 内触发保护 | | ☐ ☐ ☐ |
+| A7 | 机械臂 `capabilities()` | 如实（无位置反馈/无电流/无堵转） | | ☐ ☐ ☐ |
+| A8 | 拔掉机械臂串口后下发角度 | 返回 **False**（不得假成功） | | ☐ ☐ ☐ |
+| A9 | ACK 开启（`wait_ack=True`） | 收到固件 ACK 才 True；不回则超时 False | | ☐ ☐ ☐ |
+| A10 | 终态闩锁 | `mark_fault()` 后 `request_state("TAKEOFF")` 被拒；模拟 KILL 升级后仍不回 IDLE；`clear_fault()` 飞行中拒绝 | | ☐ ☐ ☐ |
+| A11 | 任务期失效 | NAVIGATE/INSPECT/RETURN 中断定位 / 视频无帧 → 当场停速度 + `MISSION_FAILED`（原因可读） | | ☐ ☐ ☐ |
+
+**A 类总结**：电机是否全程未转？ ☐是 ☐否（若"否"，说明混入了 B 类项目，记录在异常栏）
+
+### L1-B 会触发飞行原语类（**电机会转**）
+
+| # | 项 | 期望 | 实测 | 结果 |
+|---|---|---|---|---|
+| B1 | `takeoff()` 原语 | 电机起转、日志可见；随后 `land()` 正常 | | ☐通过 ☐失败 ☐未测 |
+| B2 | 空中 `mark_fault()` | `emergency_descent()` 被调用**且检查返回值**；≤30cm 后自动 `land()` 收尾；落地后不再下发 | | ☐ ☐ ☐ |
+| B3 | 下降能力缺失 | 底层返回 False 时打印"受控下降未推进…需要飞控级 failsafe/外部急停" | | ☐ ☐ ☐ |
+| B4 | 高度 ≤30cm 时 `kill()` | 允许执行（真正的停桨分支） | | ☐ ☐ ☐ |
+
+**B 类总结**：每项前后的桨叶状态与人员位置已记录？ ☐是 ☐否
 
 ## 实测数字
 

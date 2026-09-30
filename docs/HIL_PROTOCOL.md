@@ -35,22 +35,43 @@
 
 **目标**：在没有飞行风险的前提下，验证软件链路与故障分支。
 
+> **⚠ 必须先分清两类项目**（第三轮审计指出）：本文原先笼统写"全程电机不转"，但其中
+> 若干项目会调用**飞行原语**（`takeoff()` / `emergency_descent()` / `land()`），
+> 那些动作**会转动电机**。两类必须分开执行、分别记录，且**桨叶必须已拆除**。
+
+### L1-A 纯指令路由 / 闸门类（不触发任何飞行原语，电机不应转动）
+
+- **连接失败路径**：先不接 Tello，确认 `HARDWARE_FAULT` 且**任务不启动**（不降级为模拟）。
+- **视觉不可用路径**：把 `config/yolo_config.yaml` 的权重路径改成不存在的文件，确认 `vision_status=VISION_UNAVAILABLE`，且 `request_state("INSPECT")` 被拒。
+- **定位闸门**：不接外部定位，确认 `localization_available()=False` 且 NAVIGATE/INSPECT/RETURN 全被拒。
+- **速度指令到达**：`set_velocity` 后确认底层确实收到 `send_rc_control`（先用 `scripts/hil_smoke.py` 的离线模式验证，再上机看日志）。
+- **停桨闸门（拒绝分支）**：高度未知时调用 `kill()`，确认**拒绝执行**并打印明确错误。
+- **遥测看门狗**：断开 Tello Wi‑Fi，确认在 `timeout_land/kill` 量级内触发保护，且 `telemetry_fresh=False`。
+- **机械臂**：`capabilities()` 打印；ACK 开启时（`wait_ack=True`）确认收到固件 ACK 才返回 True；拔掉串口确认返回 False（**不得假成功**）。
+- **终态闩锁**：`mark_fault()` 后 `request_state("TAKEOFF")` 必须被拒；再模拟一次 KILL 级安全事件，
+  确认**仍不得**自行回到 IDLE —— 只能 `clear_fault()`，且**飞行中禁止复位**。
+- **任务期失效**：在 NAVIGATE/INSPECT/RETURN 中断开定位 / 让视频无帧，确认当场停速度并进
+  `MISSION_FAILED`（`get_state_dict()["mission_failed_reason"]` 可读）。
+
+### L1-B 会触发飞行原语类（**电机会转** —— 桨叶必须已拆除、机体固定、人离开旋翼平面）
+
+- **起飞原语可达性**：`takeoff()` 确实下发（电机起转、日志可见），随后立即 `land()`。
+- **受控下降闭环**：空中触发 `mark_fault()` → `emergency_descent()` 被调用**且检查返回值**；
+  降到 ≤30cm 后自动 `land()` 收尾；落地后**不再**下发动作。
+- **下降能力缺失的升级**：使底层返回 False，确认打印"受控下降未推进…需要飞控级 failsafe 或外部急停"。
+- **停桨闸门（允许分支）**：只有高度已知且 ≤30cm 时才真正停桨。
+
 ### 步骤
-1. 桨叶拆除，机体固定；接通 Arduino/PCA9685 与 Tello。
-2. 启动：`python -m backend.main --mode real`（真机模式）。
-3. 逐项执行并记录：
-   - **连接失败路径**：先不接 Tello，确认 `HARDWARE_FAULT` 且**任务不启动**（不降级为模拟）。
-   - **视觉不可用路径**：把 `config/yolo_config.yaml` 的权重路径改成不存在的文件，确认 `vision_status=VISION_UNAVAILABLE`，且 `request_state("INSPECT")` 被拒。
-   - **定位闸门**：不接外部定位，确认 `localization_available()=False` 且 NAVIGATE/INSPECT/RETURN 全被拒。
-   - **速度指令到达**：`set_velocity` 后确认底层确实收到 `send_rc_control`（用 `scripts/hil_smoke.py` 的离线模式先验证，再上机看日志）。
-   - **停桨闸门**：在"高度未知"（拔掉/屏蔽高度读数）时调用 `kill()`，确认**拒绝执行**并打印明确错误；只有高度已知且 ≤30cm 才真正停桨。
-   - **遥测看门狗**：断开 Tello Wi-Fi，确认在 `timeout_land/kill` 量级内触发保护，且 `telemetry_fresh=False`。
-   - **机械臂**：`capabilities()` 打印；ACK 开启时（`wait_ack=True`）确认收到固件 ACK 才返回 True；拔掉串口确认返回 False（**不得假成功**）。
-4. 记录到 `docs/hil_records/props_off_TEMPLATE.md`。
+1. 桨叶拆除，机体固定（L1-B 尤其重要）；接通 Arduino/PCA9685 与 Tello。
+2. 启动：`python backend/main.py --mode hardware`（真机模式）。
+   **注意**：CLI 只接受 `simulation` / `hardware` 两个取值，本文档早先写的 `--mode real` 是错的。
+3. 先做完 **L1-A** 全部项目并记录；再做 **L1-B**，每项前后确认桨叶状态与人员位置。
+4. 记录到 `docs/hil_records/props_off_TEMPLATE.md`（模板已按 A/B 分类）。
 
 ### 通过判据
-- 上列每一项都按**设计的行为**发生（拒绝/失败/进故障态），且**没有任何一项"看起来成功"**。
-- 全程飞行器**没有转动电机**。
+- **L1-A**：每一项都按**设计的行为**发生（拒绝/失败/进故障态），**没有任何一项"看起来成功"**，
+  且**电机全程不转**。
+- **L1-B**：电机按预期起转/停止；下降闭环与收尾降落可复现；**无一项静默失败**。
 
 ---
 
@@ -60,7 +81,7 @@
 
 ### 步骤
 1. 系留绳固定，长度 ≤1.5 m；空域清空；操作人手握急停手段。
-2. `python -m backend.main --mode real`；确认 `localization_available()=False`（**无外部定位时不应允许自动导航** —— 这正是预期）。
+2. `python backend/main.py --mode hardware`；确认 `localization_available()=False`（**无外部定位时不应允许自动导航** —— 这正是预期）。
 3. 手动起飞到 0.5–1.0 m：记录高度保持的**实测**均值/最大偏差（用飞行日志 CSV，不要凭肉眼）。
 4. **受控下降**：触发 `EMERGENCY`，确认按分帧脉冲下降且**不砍桨**；触地后进 `IDLE`。
 5. **急停**：高度 >30cm 时调用 `kill()` → 必须**被拒绝**；降到 ≤30cm 后调用 → 允许。

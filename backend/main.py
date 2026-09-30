@@ -101,9 +101,13 @@ class MissionController:
         self._last_localization = None         # 最近一次可用观测 (供状态汇报)
         self._telemetry_stale = False          # 本帧遥测是否陈旧 (供状态汇报, 不被消费)
         self._fault_descent_started = False    # FAULT 时是否已发起受控下降
+        self._fault_land_requested = False     # FAULT 收尾: 是否已请求 land()
+        self._fault_descent_failures = 0       # 终态下降"未推进"的计数(限频告警)
+        self._terminal_latched = False         # 终态闩锁: 只能 clear_fault() 解锁
         self._video_last_obj = None            # 视频冻结检测: 上一帧对象
         self._video_last_change_t = None       # 视频冻结检测: 最近一次换帧的时刻
         self._video_seen_change = False        # 是否曾观察到换帧(避免启动瞬间误判)
+        self._video_seen_frame = False         # 是否**拿到过任何帧**(零帧也算不可用)
         self._fault_reason = None
         self._mission_failed_reason = None
 
@@ -329,25 +333,26 @@ class MissionController:
         detections = []
 
         # ---------- FAULT / MISSION_FAILED: 终态, 但**安全动作必须继续执行** ----------
-        # 审计第 2 条: 终态不等于"什么都不做"。停速度之后飞机可能仍在空中, 必须每帧
-        # 继续推进受控下降直到触地; 只有确认落地(或本来就没起飞)才停手。
+        # 第三轮审计 P0: 终态不等于"什么都不做", 而且下降必须是**闭环**:
+        #   1) 高度可确认且已到低空 -> 调 land() 收尾(emergency_descent 不会自己 land);
+        #   2) 否则推进一次受控下降, 并**检查返回值** —— False = 无下降能力, 必须升级告警;
+        #   3) 只有彻底落地(或本来就没起飞)才停手。
         if self.state in self.FAILURE_STATES:
             self._pending_control = np.zeros(3)
             if getattr(self.drone, "is_flying", False):
-                descent = getattr(self.drone, "emergency_descent", None)
-                land = getattr(self.drone, "land", None)
-                try:
-                    if callable(descent):
-                        descent(timeout_s=0.1, poll_s=0.0, release_velocity=False)
-                    elif callable(land):
-                        land()
-                except TypeError:
-                    try:
-                        descent() if callable(descent) else land()
-                    except Exception as e:
-                        print("[FAULT] 受控下降失败: {}".format(e))
-                except Exception as e:
-                    print("[FAULT] 受控下降失败: {}".format(e))
+                height = self._safe_height_cm()
+                if height is not None and height <= self.FAULT_LAND_HEIGHT_CM:
+                    if not getattr(self, "_fault_land_requested", False):
+                        land = getattr(self.drone, "land", None)
+                        if callable(land):
+                            try:
+                                land()
+                                self._fault_land_requested = True
+                                print("[FAULT] 已确认低空({:.0f}cm) -> 请求降落收尾".format(height))
+                            except Exception as e:
+                                print("[FAULT] 降落调用失败: {}".format(e))
+                else:
+                    self._fault_descend_step()
             return detections, self._pending_control
 
         # ---------- IDLE: 等待指令 ----------
@@ -832,41 +837,112 @@ class MissionController:
     #: 视频连续多久没有新帧即视为冻结
     VIDEO_STALL_MAX_AGE_S = 2.0
 
+    #: 终态下降的收尾高度(cm): 确认低于它以后改为请求 land() 收尾
+    FAULT_LAND_HEIGHT_CM = 30.0
+
     def height_is_known(self) -> bool:
-        """当前高度是否可信 (真机透传 TelloController 的闸门; 仿真恒为真)。"""
+        """当前高度是否可信。
+
+        仿真: 物理模型给出的高度恒可信。
+        真机: **必须由适配器证明** —— 适配器未实现 height_is_known() 时按"不可信"
+        处理(fail-closed)。此前是返回 True(fail-open), 与"任何真机适配器都必须
+        证明高度可信"的契约不符(第三轮审计 P1)。
+        """
         if self.mock:
             return True
         fn = getattr(self.drone, "height_is_known", None)
         if not callable(fn):
-            return True
+            print("[WARN] 适配器未实现 height_is_known(): 按高度不可信处理(fail-closed)")
+            return False
         try:
             return bool(fn())
         except Exception:
             return False
+
+    def _safe_height_cm(self):
+        """尽量安全地读一次高度(cm); 不可信/读不到一律返回 None(绝不猜)。"""
+        if self.mock:
+            try:
+                return float(self.current_pos[2])
+            except Exception:
+                return None
+        if not self.height_is_known():
+            return None
+        getter = getattr(self.drone, "get_height", None)
+        if not callable(getter):
+            return None
+        try:
+            return float(getter())
+        except Exception:
+            return None
+
+    def _note_fault_descent_failure(self, why: str) -> None:
+        """终态下降"未推进"的限频告警(第 1 次与每 50 次各报一次)。"""
+        self._fault_descent_failures = getattr(self, "_fault_descent_failures", 0) + 1
+        if self._fault_descent_failures == 1 or self._fault_descent_failures % 50 == 0:
+            print("[FAULT] 受控下降未推进(第 {} 次): {} "
+                  "—— 需要飞控级 failsafe 或外部急停".format(
+                      self._fault_descent_failures, why))
+
+    def _fault_descend_step(self) -> bool:
+        """终态期间推进一次受控下降, 返回是否**确实推进**。
+
+        第三轮审计 P0: 原实现直接调用 emergency_descent() 并**忽略返回值**。而
+        emergency_descent() 返回 False 明确表示"根本没有下降能力(无底层链路)",
+        且它本身**不会**自动 land() —— 所以"持续推进直到触地"当时只是描述, 没有
+        代码保证。现在: 返回 False 时计入失败并限频升级告警。
+        """
+        descent = getattr(self.drone, "emergency_descent", None)
+        if not callable(descent):
+            self._note_fault_descent_failure("适配器无 emergency_descent")
+            return False
+        try:
+            ok = descent(timeout_s=0.1, poll_s=0.0, release_velocity=False)
+        except TypeError:
+            try:
+                ok = descent()
+            except Exception as e:
+                self._note_fault_descent_failure(str(e))
+                return False
+        except Exception as e:
+            self._note_fault_descent_failure(str(e))
+            return False
+        if ok is False:
+            self._note_fault_descent_failure("emergency_descent 返回 False(无下降能力)")
+            return False
+        self._fault_descent_started = True
+        return True
 
     def _note_video_frame(self) -> None:
         """观察视频帧是否在更新。
 
         get_frame() 有新帧时从队列返回**新对象**, 队列空时回退到缓存的最新帧
         (同一对象) —— 所以对象身份变化就是"确实收到新帧"的可用判据。
+        另外记录"是否**拿到过任何帧**": 零帧与"曾经有帧后冻结"是两种不同失效。
         """
         frame = self._video_frame
         if frame is None:
             return
+        self._video_seen_frame = True
         if frame is not getattr(self, "_video_last_obj", None):
             self._video_last_obj = frame
             self._video_last_change_t = time.time()
             self._video_seen_change = True
 
     def video_stalled(self, max_age_s: float = None) -> bool:
-        """视频是否已冻结(连续没有新帧)。
+        """视频是否不可用(冻结, 或**从未拿到任何帧**)。
 
-        仅在**曾经观察到帧更新**之后才可能为 True: 从未拿到帧由视觉可用性闸门
-        负责, 这里不重复判失败, 避免流启动瞬间误杀任务。
+        第三轮审计 P1: 原实现要求"此前至少见过一帧", 于是零视频帧时**永远不触发**。
+        而检测器"模型可用"不等于"视频可用" —— 若定位来自 UWB 等独立来源, INSPECT
+        就能在零视频帧的情况下白等到超时, 再当作"巡检完成"去返航。
+        现在分两种情形:
+          (1) 从未拿到帧 -> 以**进入当前受监控状态的时刻**起算;
+          (2) 拿到过帧但已停止更新 -> 用对象身份判据。
         """
-        if not getattr(self, "_video_seen_change", False):
-            return False
         limit = self.VIDEO_STALL_MAX_AGE_S if max_age_s is None else max_age_s
+        if not getattr(self, "_video_seen_frame", False):
+            entry = getattr(self, "_state_entry_time", None)
+            return entry is not None and (time.time() - entry) > limit
         last = getattr(self, "_video_last_change_t", None)
         if last is None:
             return False
@@ -992,7 +1068,8 @@ class MissionController:
         return None
 
     def _set_state(self, new_state: str, reason: str = "", *,
-                   automatic: bool = False, force: bool = False) -> bool:
+                   automatic: bool = False, force: bool = False,
+                   allow_terminal_exit: bool = False) -> bool:
         """全系统唯一的状态转换入口。
 
         - 闸门在这里统一生效, **包括自动转换** —— 此前自动路径直接赋值,
@@ -1001,7 +1078,18 @@ class MissionController:
           而不是静默留在原地假装任务正常;
         - automatic=False: 外部请求, 被拦下时保持原状态并返回 False;
         - force=True: 故障/紧急等必须立即生效的路径。
+
+        **终态闩锁**(第三轮审计 P0): 一旦进过 FAULT/MISSION_FAILED, 之后只允许再进
+        终态或 EMERGENCY(为了继续执行安全动作), 其余一律拒绝 —— **包括 force=True**。
+        唯一出口是 clear_fault()(它显式传 allow_terminal_exit=True)。
+        实测漏洞: 安全检查的 KILL 分支会 trigger_emergency()(force=True) 把 FAULT 改成
+        EMERGENCY, 而 EMERGENCY 又能回 IDLE —— "只能人工复位"因此名不副实。
         """
+        if getattr(self, "_terminal_latched", False) and not allow_terminal_exit:
+            if new_state not in self.FAILURE_STATES and new_state != "EMERGENCY":
+                print("[ERROR] 拒绝离开终态: {} → {} (已闩锁, 只能 clear_fault() 人工复位)".format(
+                    self.state, new_state))
+                return False
         if not force:
             blocked = self._state_gate_reason(new_state)
             if blocked:
@@ -1009,6 +1097,7 @@ class MissionController:
                     self.state, new_state, blocked))
                 if automatic:
                     self.state = "MISSION_FAILED"
+                    self._terminal_latched = True
                     self._mission_failed_reason = "{} (目标状态 {})".format(
                         blocked, new_state)
                     self._state_entry_time = time.time()
@@ -1016,6 +1105,13 @@ class MissionController:
                 return False
 
         self.state = new_state
+        if new_state in self.FAILURE_STATES:
+            self._terminal_latched = True
+            # 终态原因必须可观测(否则"为什么失败"只能靠翻日志)
+            if new_state == "MISSION_FAILED" and reason:
+                self._mission_failed_reason = reason
+            elif new_state == "FAULT" and reason:
+                self._fault_reason = reason
         self._state_entry_time = time.time()
         if new_state not in self.FAILURE_STATES and new_state != "EMERGENCY":
             self._mission_failed_reason = None
@@ -1039,27 +1135,12 @@ class MissionController:
                 pass
         self._fault_reason = reason
         self._fault_descent_started = False
+        self._fault_land_requested = False
 
         flying = bool(getattr(self.drone, "is_flying", False))
         if flying:
-            descent = getattr(self.drone, "emergency_descent", None)
-            land = getattr(self.drone, "land", None)
-            try:
-                if callable(descent):
-                    descent(timeout_s=0.1, poll_s=0.0, release_velocity=False)
-                    self._fault_descent_started = True
-                elif callable(land):
-                    land()
-                    self._fault_descent_started = True
-            except TypeError:
-                try:
-                    descent()          # 不支持上述关键字的实现
-                    self._fault_descent_started = True
-                except Exception as e:
-                    print("[FAULT] 受控下降调用失败: {}".format(e))
-            except Exception as e:
-                print("[FAULT] 受控下降调用失败: {}".format(e))
-            if not self._fault_descent_started:
+            # 复用闭环下降步(含返回值检查与限频升级告警), 不再各写一份
+            if not self._fault_descend_step():
                 print("[FAULT] !! 无法发起受控下降: 需要飞控级 failsafe 或外部急停")
 
         self._set_state("FAULT", reason, force=True)
@@ -1072,8 +1153,9 @@ class MissionController:
         安全约束: 只允许在**未起飞**时复位 —— 空中不允许一键把终态清成 IDLE,
         否则就是绕过安全设计。空中应当先完成受控下降。
         """
-        if self.state not in self.FAILURE_STATES:
-            print("[WARN] 当前状态 {} 不是终态, 无需复位".format(self.state))
+        if not (self.state in self.FAILURE_STATES
+                or getattr(self, "_terminal_latched", False)):
+            print("[WARN] 当前状态 {} 不是终态(且未闩锁), 无需复位".format(self.state))
             return False
         if bool(getattr(self.drone, "is_flying", False)):
             print("[ERROR] 拒绝在飞行中复位终态: 请先完成受控下降再复位")
@@ -1082,8 +1164,10 @@ class MissionController:
         self._fault_reason = None
         self._mission_failed_reason = None
         self._fault_descent_started = False
-        self.state = "IDLE"
-        self._state_entry_time = time.time()
+        self._fault_land_requested = False
+        self._fault_descent_failures = 0
+        self._terminal_latched = False          # 先解锁, 再走统一入口
+        self._set_state("IDLE", reason, force=True, allow_terminal_exit=True)
         print("[MAIN] 终态复位: {} → IDLE ({})".format(prev, reason))
         return True
 
