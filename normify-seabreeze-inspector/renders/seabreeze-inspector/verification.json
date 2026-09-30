@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "id": "seabreeze-inspector.verification",
+  "updated_at": "2026-09-30T13:35:00.618Z",
+  "mode": "layers",
+  "reading": {
+    "zh": "每个脚本产出一族实测数字：前三个在仿真里（风扰/EKF、悬停精度、legacy 与 velocity 两条执行路径对照），后两个量硬件与视觉（机械臂/控制延迟、检测吞吐）。注意 sim-mode-bench 的结论是仿真证据，不能当真机性能。",
+    "en": "Each script produces one family of measured numbers: the first three live in simulation (wind/EKF, hover accuracy, and the legacy-versus-velocity execution-path comparison), the last two measure hardware and vision (arm/control latency, detection throughput). Note sim-mode-bench is simulation evidence, not hardware performance."
+  },
+  "order": [
+    "seabreeze-inspector.verification.gust-ekf-demo",
+    "seabreeze-inspector.verification.hover-wind",
+    "seabreeze-inspector.verification.sim-mode-bench",
+    "seabreeze-inspector.verification.arm-latency",
+    "seabreeze-inspector.verification.detection-bench"
+  ]
+}

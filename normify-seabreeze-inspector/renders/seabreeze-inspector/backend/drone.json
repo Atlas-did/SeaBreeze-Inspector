@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "id": "seabreeze-inspector.backend.drone",
+  "updated_at": "2026-09-30T04:36:10.935Z",
+  "mode": "groups",
+  "reading": {
+    "zh": "指令 schema 与状态解析定义契约 → Tello 控制器经指令执行器与 RC 管理器下发 → 视频流提供感知；mock Tello 是无真机时的替身。",
+    "en": "Command schema and state parsing define the contract, the Tello controller executes through the command runner and RC manager, and the video stream plus mock Tello cover perception and offline testing."
+  },
+  "order": [
+    "seabreeze-inspector.backend.drone.command-schema",
+    "seabreeze-inspector.backend.drone.state-parser",
+    "seabreeze-inspector.backend.drone.tello-controller",
+    "seabreeze-inspector.backend.drone.command-runner",
+    "seabreeze-inspector.backend.drone.rc-manager",
+    "seabreeze-inspector.backend.drone.video-stream",
+    "seabreeze-inspector.backend.drone.mock-tello"
+  ],
+  "groups": [
+    {
+      "id": "contract",
+      "title": {
+        "zh": "契约与解析",
+        "en": "Contract & Parsing"
+      },
+      "children": [
+        "seabreeze-inspector.backend.drone.command-schema",
+        "seabreeze-inspector.backend.drone.state-parser"
+      ]
+    },
+    {
+      "id": "control",
+      "title": {
+        "zh": "控制执行",
+        "en": "Control Execution"
+      },
+      "children": [
+        "seabreeze-inspector.backend.drone.tello-controller",
+        "seabreeze-inspector.backend.drone.command-runner",
+        "seabreeze-inspector.backend.drone.rc-manager"
+      ]
+    },
+    {
+      "id": "media",
+      "title": {
+        "zh": "视频与仿真替身",
+        "en": "Video & Test Double"
+      },
+      "children": [
+        "seabreeze-inspector.backend.drone.video-stream",
+        "seabreeze-inspector.backend.drone.mock-tello"
+      ]
+    }
+  ]
+}

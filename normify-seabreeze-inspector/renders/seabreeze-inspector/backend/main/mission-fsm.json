@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "id": "seabreeze-inspector.backend.main.mission-fsm",
+  "updated_at": "2026-09-30T05:37:43.391Z",
+  "mode": "layers",
+  "reading": {
+    "zh": "命令发起状态转换；状态机每帧执行转换后的行为。",
+    "en": "Commands request transitions; the state machine executes the resulting behaviour every frame."
+  },
+  "order": [
+    "seabreeze-inspector.backend.main.mission-fsm.state-commands",
+    "seabreeze-inspector.backend.main.mission-fsm.state-machine"
+  ]
+}

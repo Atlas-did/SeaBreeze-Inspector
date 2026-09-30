@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "id": "seabreeze-inspector.backend.vision",
+  "updated_at": "2026-09-30T04:36:10.993Z",
+  "mode": "layers",
+  "reading": {
+    "zh": "从左到右：数据集工具准备标注与划分 → 训练器拟合模型 → 检测器推理输出缺陷框；mock 检测器用于无权重时的仿真与测试。",
+    "en": "Left to right: dataset utilities prepare labels and splits, the trainer fits the model, and the defect detector runs inference; the mock detector stands in when no weights are available."
+  },
+  "order": [
+    "seabreeze-inspector.backend.vision.dataset-utils",
+    "seabreeze-inspector.backend.vision.trainer",
+    "seabreeze-inspector.backend.vision.defect-detector",
+    "seabreeze-inspector.backend.vision.mock-detector"
+  ]
+}

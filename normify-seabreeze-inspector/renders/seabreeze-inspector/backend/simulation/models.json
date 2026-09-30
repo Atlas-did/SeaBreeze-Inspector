@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "id": "seabreeze-inspector.backend.simulation.models",
+  "updated_at": "2026-09-30T05:37:58.224Z",
+  "mode": "groups",
+  "reading": {
+    "zh": "四旋翼把控制与风扰积分起来；风机与机械臂提供任务几何；虚拟传感器产生 EKF 消费的带噪观测。",
+    "en": "The quadrotor integrates control plus wind; the turbine and arm provide the task geometry; the virtual sensor produces the noisy measurements the EKF consumes."
+  },
+  "order": [
+    "seabreeze-inspector.backend.simulation.models.quadrotor",
+    "seabreeze-inspector.backend.simulation.models.wind",
+    "seabreeze-inspector.backend.simulation.models.arm-and-turbine",
+    "seabreeze-inspector.backend.simulation.models.virtual-sensor"
+  ],
+  "groups": [
+    {
+      "id": "vehicle",
+      "title": {
+        "zh": "飞行器与风",
+        "en": "Vehicle & Wind"
+      },
+      "children": [
+        "seabreeze-inspector.backend.simulation.models.quadrotor",
+        "seabreeze-inspector.backend.simulation.models.wind"
+      ]
+    },
+    {
+      "id": "task",
+      "title": {
+        "zh": "任务几何与传感器",
+        "en": "Task Geometry & Sensors"
+      },
+      "children": [
+        "seabreeze-inspector.backend.simulation.models.arm-and-turbine",
+        "seabreeze-inspector.backend.simulation.models.virtual-sensor"
+      ]
+    }
+  ]
+}

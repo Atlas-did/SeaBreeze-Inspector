@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "id": "seabreeze-inspector.web3d",
+  "updated_at": "2026-09-30T06:00:05.982Z",
+  "mode": "layers",
+  "reading": {
+    "zh": "先离线生成资产 → 场景把模型搭起来 → 入口与 HUD 驱动渲染循环 → 数据桥拉取实时遥测。",
+    "en": "Assets are generated offline, then the scene builds them, the entry plus HUD drive the render loop, and the data bridge pulls live telemetry."
+  },
+  "order": [
+    "seabreeze-inspector.web3d.asset-pipeline",
+    "seabreeze-inspector.web3d.scene",
+    "seabreeze-inspector.web3d.hud-and-entry",
+    "seabreeze-inspector.web3d.data-bridge"
+  ]
+}

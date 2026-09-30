@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "id": "seabreeze-inspector.research-ops",
+  "updated_at": "2026-09-30T06:00:05.880Z",
+  "mode": "groups",
+  "reading": {
+    "zh": "v5.2 流水线按审计→划分→冻结 OOD 评估→预检顺序阅读；中间组产出增强数据与论文产物；最后一组是外部评审与环境安装。",
+    "en": "The v5.2 pipeline runs audit, split, frozen-OOD eval and preflight in order; the middle group produces augmented data and paper artefacts; the last group handles external review and env setup."
+  },
+  "order": [
+    "seabreeze-inspector.research-ops.v5-2-audit",
+    "seabreeze-inspector.research-ops.v5-2-split",
+    "seabreeze-inspector.research-ops.v5-2-ood-eval",
+    "seabreeze-inspector.research-ops.v5-2-preflight",
+    "seabreeze-inspector.research-ops.fog-synthesis",
+    "seabreeze-inspector.research-ops.figure-generation",
+    "seabreeze-inspector.research-ops.docx-export",
+    "seabreeze-inspector.research-ops.kimi-review",
+    "seabreeze-inspector.research-ops.setup-scripts"
+  ],
+  "groups": [
+    {
+      "id": "pipeline",
+      "title": {
+        "zh": "v5.2 实验流水线",
+        "en": "v5.2 Experiment Pipeline"
+      },
+      "children": [
+        "seabreeze-inspector.research-ops.v5-2-audit",
+        "seabreeze-inspector.research-ops.v5-2-split",
+        "seabreeze-inspector.research-ops.v5-2-ood-eval",
+        "seabreeze-inspector.research-ops.v5-2-preflight"
+      ]
+    },
+    {
+      "id": "artefacts",
+      "title": {
+        "zh": "增强与产物",
+        "en": "Augmentation & Artefacts"
+      },
+      "children": [
+        "seabreeze-inspector.research-ops.fog-synthesis",
+        "seabreeze-inspector.research-ops.figure-generation",
+        "seabreeze-inspector.research-ops.docx-export"
+      ]
+    },
+    {
+      "id": "external",
+      "title": {
+        "zh": "外部评审与环境",
+        "en": "External Review & Setup"
+      },
+      "children": [
+        "seabreeze-inspector.research-ops.kimi-review",
+        "seabreeze-inspector.research-ops.setup-scripts"
+      ]
+    }
+  ]
+}

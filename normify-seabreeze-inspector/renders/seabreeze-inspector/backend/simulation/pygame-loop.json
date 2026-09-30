@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "seabreeze-inspector.backend.simulation.pygame-loop",
+  "updated_at": "2026-09-30T05:37:58.305Z",
+  "mode": "layers",
+  "reading": {
+    "zh": "引擎拥有状态与时钟 → 输入把按键变成任务动作 → 帧桥把状态交给渲染器。",
+    "en": "The engine owns state and timing, input turns keys into mission actions, and the frame bridge hands state to the renderer."
+  },
+  "order": [
+    "seabreeze-inspector.backend.simulation.pygame-loop.engine",
+    "seabreeze-inspector.backend.simulation.pygame-loop.input-actions",
+    "seabreeze-inspector.backend.simulation.pygame-loop.frame-render"
+  ]
+}

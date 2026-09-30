@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "id": "seabreeze-inspector.backend",
+  "updated_at": "2026-09-30T13:34:56.261Z",
+  "mode": "groups",
+  "reading": {
+    "zh": "先看「算法与硬件」（EKF/前馈 PID/机械臂/视觉，以及提供可信位置的定位源），再看「平台与仿真」（仿真、单循环 runtime、HAL、OmniSim 桥），最后由「调度与安全」把两者串成任务；utils 是被全部依赖的基础设施。定位源（localization）是视觉之外的第二类感知：它决定导航/巡检/返航能不能开。",
+    "en": "Start with Algorithms & Hardware (EKF, feedforward PID, arm, vision, plus the localization sources that supply a trusted position), then Platform & Simulation (simulation, runtime loop, HAL, OmniSim bridge); Dispatch & Safety ties them into a mission. Localization is the second perception path besides vision: it decides whether navigate/inspect/return may proceed."
+  },
+  "order": [
+    "seabreeze-inspector.backend.core",
+    "seabreeze-inspector.backend.drone",
+    "seabreeze-inspector.backend.arm",
+    "seabreeze-inspector.backend.vision",
+    "seabreeze-inspector.backend.localization",
+    "seabreeze-inspector.backend.simulation",
+    "seabreeze-inspector.backend.runtime",
+    "seabreeze-inspector.backend.hal",
+    "seabreeze-inspector.backend.omnisim",
+    "seabreeze-inspector.backend.main",
+    "seabreeze-inspector.backend.mission",
+    "seabreeze-inspector.backend.utils"
+  ],
+  "groups": [
+    {
+      "id": "algo",
+      "title": {
+        "zh": "算法与硬件",
+        "en": "Algorithms & Hardware"
+      },
+      "children": [
+        "seabreeze-inspector.backend.core",
+        "seabreeze-inspector.backend.drone",
+        "seabreeze-inspector.backend.arm",
+        "seabreeze-inspector.backend.vision",
+        "seabreeze-inspector.backend.localization"
+      ]
+    },
+    {
+      "id": "platform",
+      "title": {
+        "zh": "平台与仿真",
+        "en": "Platform & Simulation"
+      },
+      "children": [
+        "seabreeze-inspector.backend.simulation",
+        "seabreeze-inspector.backend.runtime",
+        "seabreeze-inspector.backend.hal",
+        "seabreeze-inspector.backend.omnisim"
+      ]
+    },
+    {
+      "id": "orchestration",
+      "title": {
+        "zh": "调度与安全",
+        "en": "Dispatch & Safety"
+      },
+      "children": [
+        "seabreeze-inspector.backend.main",
+        "seabreeze-inspector.backend.mission"
+      ]
+    },
+    {
+      "id": "infra",
+      "title": {
+        "zh": "基础设施",
+        "en": "Infrastructure"
+      },
+      "children": [
+        "seabreeze-inspector.backend.utils"
+      ]
+    }
+  ]
+}

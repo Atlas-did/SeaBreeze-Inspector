@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "id": "seabreeze-inspector.configuration",
+  "updated_at": "2026-09-30T05:38:05.882Z",
+  "mode": "layers",
+  "reading": {
+    "zh": "两类参数：飞行器与机械臂，以及感知模型。",
+    "en": "Two parameter families: the flight vehicle plus arm, and the perception model."
+  },
+  "order": [
+    "seabreeze-inspector.configuration.flight-vehicle",
+    "seabreeze-inspector.configuration.perception"
+  ]
+}

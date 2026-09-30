@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "id": "seabreeze-inspector.backend.main",
+  "updated_at": "2026-09-30T04:27:39.300Z",
+  "mode": "groups",
+  "reading": {
+    "zh": "同一个 MissionController 的四块：先构造装配（含配置与阈值）→ 8 状态机与状态变更接口 → 单帧循环（总线命令/EKF/安全/日志）→ CLI 入口按参数构造并保证优雅关闭。",
+    "en": "Four slices of one MissionController: construction and wiring (config, thresholds) to the eight-state machine and its transition API to the per-frame loop (bus commands, EKF, safety, logging) to the CLI entry that builds it and guarantees a graceful shutdown."
+  },
+  "order": [
+    "seabreeze-inspector.backend.main.mission-controller",
+    "seabreeze-inspector.backend.main.mission-fsm",
+    "seabreeze-inspector.backend.main.runtime-loop",
+    "seabreeze-inspector.backend.main.cli"
+  ],
+  "groups": [
+    {
+      "id": "assembly",
+      "title": {
+        "zh": "装配与状态机",
+        "en": "Assembly & FSM"
+      },
+      "children": [
+        "seabreeze-inspector.backend.main.mission-controller",
+        "seabreeze-inspector.backend.main.mission-fsm"
+      ]
+    },
+    {
+      "id": "run",
+      "title": {
+        "zh": "循环与入口",
+        "en": "Loop & Entry"
+      },
+      "children": [
+        "seabreeze-inspector.backend.main.runtime-loop",
+        "seabreeze-inspector.backend.main.cli"
+      ]
+    }
+  ]
+}

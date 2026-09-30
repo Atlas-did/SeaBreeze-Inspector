@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "id": "seabreeze-inspector.backend.omnisim",
+  "updated_at": "2026-09-30T04:27:39.248Z",
+  "mode": "grid",
+  "reading": {
+    "zh": "先看 adapter：它把 Mavic bridge 的 HTTP 接口落成统一的 AltitudeHoldDriver；CLI 只负责按 --backend 选驱动并落盘结果 JSON。",
+    "en": "Start with adapter: it turns the Mavic bridge HTTP API into the unified AltitudeHoldDriver; the CLI only picks a driver via --backend and writes the result JSON."
+  },
+  "order": [
+    "seabreeze-inspector.backend.omnisim.adapter",
+    "seabreeze-inspector.backend.omnisim.cli"
+  ]
+}

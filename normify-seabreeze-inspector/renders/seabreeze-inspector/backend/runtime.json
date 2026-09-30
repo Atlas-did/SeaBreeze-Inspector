@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "id": "seabreeze-inspector.backend.runtime",
+  "updated_at": "2026-09-30T05:37:58.061Z",
+  "mode": "layers",
+  "reading": {
+    "zh": "运行时核心拥有控制周期；headless 模式下的输入与状态汇总向它供数。",
+    "en": "The runtime core owns the control cycle; input and state aggregation feed it in headless mode."
+  },
+  "order": [
+    "seabreeze-inspector.backend.runtime.loop-core",
+    "seabreeze-inspector.backend.runtime.input-and-state"
+  ]
+}

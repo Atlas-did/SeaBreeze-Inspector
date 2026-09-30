@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "id": "seabreeze-inspector.backend.localization",
+  "updated_at": "2026-09-30T13:32:19.527Z",
+  "mode": "layers",
+  "max_columns": 3,
+  "reading": {
+    "zh": "从左到右：先看观测契约与可用性判定（base），再看两种实现——真实 ArUco 推帧解算，与给仿真/HIL 用的注入式真值。共用的判据是\"不可用就返回 None\"。",
+    "en": "Left to right: the observation contract and usability rules first, then the two implementations - real ArUco frame solving and an injected ground-truth source for simulation/HIL. Shared rule: unusable means None."
+  },
+  "order": [
+    "seabreeze-inspector.backend.localization.base",
+    "seabreeze-inspector.backend.localization.aruco-source",
+    "seabreeze-inspector.backend.localization.ground-truth"
+  ]
+}

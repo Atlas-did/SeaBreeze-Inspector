@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "seabreeze-inspector.hardware-cad",
+  "updated_at": "2026-09-30T06:00:21.519Z",
+  "mode": "layers",
+  "reading": {
+    "zh": "总装模型展示怎么装起来，七个结构件是要打印的部分，旧版文件只作历史保留。",
+    "en": "The assembly shows how it goes together, the seven parts are what you print, and the legacy files are kept only as history."
+  },
+  "order": [
+    "seabreeze-inspector.hardware-cad.assembly",
+    "seabreeze-inspector.hardware-cad.arm-parts",
+    "seabreeze-inspector.hardware-cad.legacy-prototypes"
+  ]
+}

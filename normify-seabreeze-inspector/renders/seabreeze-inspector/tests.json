@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "id": "seabreeze-inspector.tests",
+  "updated_at": "2026-09-30T06:00:05.690Z",
+  "mode": "groups",
+  "reading": {
+    "zh": "自下而上：先算法与硬件单元测试 → 再基础设施与仿真 → 最后跨模块集成。",
+    "en": "Bottom-up: algorithm and hardware unit tests, then infrastructure and simulation, then cross-module integration."
+  },
+  "order": [
+    "seabreeze-inspector.tests.control-algorithms",
+    "seabreeze-inspector.tests.flight-commands",
+    "seabreeze-inspector.tests.robotic-arm",
+    "seabreeze-inspector.tests.mission-safety",
+    "seabreeze-inspector.tests.infrastructure",
+    "seabreeze-inspector.tests.simulation",
+    "seabreeze-inspector.tests.integration-and-vision"
+  ],
+  "groups": [
+    {
+      "id": "unit",
+      "title": {
+        "zh": "单元层",
+        "en": "Unit Level"
+      },
+      "children": [
+        "seabreeze-inspector.tests.control-algorithms",
+        "seabreeze-inspector.tests.flight-commands",
+        "seabreeze-inspector.tests.robotic-arm",
+        "seabreeze-inspector.tests.mission-safety"
+      ]
+    },
+    {
+      "id": "platform",
+      "title": {
+        "zh": "平台层",
+        "en": "Platform Level"
+      },
+      "children": [
+        "seabreeze-inspector.tests.infrastructure",
+        "seabreeze-inspector.tests.simulation"
+      ]
+    },
+    {
+      "id": "integration",
+      "title": {
+        "zh": "集成层",
+        "en": "Integration Level"
+      },
+      "children": [
+        "seabreeze-inspector.tests.integration-and-vision"
+      ]
+    }
+  ]
+}

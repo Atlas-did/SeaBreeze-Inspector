@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "id": "seabreeze-inspector.docs",
+  "updated_at": "2026-09-30T05:38:05.957Z",
+  "mode": "layers",
+  "reading": {
+    "zh": "先读项目与交接文档建立全局认识，再读接口与推导类技术文档。",
+    "en": "Start with the project and handover docs for orientation, then the technical guides for interfaces and derivations."
+  },
+  "order": [
+    "seabreeze-inspector.docs.project-handover",
+    "seabreeze-inspector.docs.technical-guides"
+  ]
+}

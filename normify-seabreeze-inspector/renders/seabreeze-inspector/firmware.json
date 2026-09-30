@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "seabreeze-inspector.firmware",
+  "updated_at": "2026-09-30T05:38:06.037Z",
+  "mode": "layers",
+  "reading": {
+    "zh": "初始化配置舵机 → 串口协议解析命令 → 平滑运动与看门狗真正安全地驱动关节。",
+    "en": "Boot initialises the servos, the serial protocol parses commands, and motion plus watchdog actually drive the joints safely."
+  },
+  "order": [
+    "seabreeze-inspector.firmware.boot-and-loop",
+    "seabreeze-inspector.firmware.serial-protocol",
+    "seabreeze-inspector.firmware.motion-and-safety"
+  ]
+}

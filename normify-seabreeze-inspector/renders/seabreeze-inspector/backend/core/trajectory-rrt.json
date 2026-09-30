@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "seabreeze-inspector.backend.core.trajectory-rrt",
+  "updated_at": "2026-09-30T05:37:43.234Z",
+  "mode": "layers",
+  "reading": {
+    "zh": "plan() 驱动主循环 → 采样/扩展/碰撞检测生长搜索树 → 回溯与平滑把它变成可飞的路径。",
+    "en": "plan() drives the loop; sampling, steering and collision checks expand the tree; backtracking and smoothing turn it into a flyable path."
+  },
+  "order": [
+    "seabreeze-inspector.backend.core.trajectory-rrt.planner-core",
+    "seabreeze-inspector.backend.core.trajectory-rrt.sampling-collision",
+    "seabreeze-inspector.backend.core.trajectory-rrt.path-smoothing"
+  ]
+}

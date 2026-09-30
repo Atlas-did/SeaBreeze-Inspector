@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "id": "seabreeze-inspector.backend.mission",
+  "updated_at": "2026-09-30T04:27:39.141Z",
+  "mode": "grid",
+  "reading": {
+    "zh": "先看 states：状态名与合法转换是任务语义的单源定义；再看 safety：三级失效保护的阈值与事件级别（KILL > LAND > WARN）由主调度每帧消费。",
+    "en": "Start with states: state names and legal transitions are the single definition of mission semantics. Then safety: its three tiers (KILL > LAND > WARN) are consumed every frame by the dispatcher."
+  },
+  "order": [
+    "seabreeze-inspector.backend.mission.states",
+    "seabreeze-inspector.backend.mission.safety"
+  ]
+}

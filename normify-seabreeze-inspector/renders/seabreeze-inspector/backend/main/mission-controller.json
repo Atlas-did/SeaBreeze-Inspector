@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "id": "seabreeze-inspector.backend.main.mission-controller",
+  "updated_at": "2026-09-30T05:37:43.304Z",
+  "mode": "layers",
+  "reading": {
+    "zh": "装配层负责把子模块接起来；遥测接口是外部世界读取与复位它的入口。",
+    "en": "Assembly wires the controller's submodules; the telemetry API is what the outside world reads and resets."
+  },
+  "order": [
+    "seabreeze-inspector.backend.main.mission-controller.assembly",
+    "seabreeze-inspector.backend.main.mission-controller.telemetry-api"
+  ]
+}

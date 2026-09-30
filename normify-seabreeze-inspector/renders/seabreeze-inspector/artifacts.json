@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "id": "seabreeze-inspector.artifacts",
+  "updated_at": "2026-09-30T05:37:43.078Z",
+  "mode": "layers",
+  "reading": {
+    "zh": "两类产物：模型权重，以及可提交的数据清单。",
+    "en": "Two artefact families: model weights and the committable data manifests."
+  },
+  "order": [
+    "seabreeze-inspector.artifacts.weights",
+    "seabreeze-inspector.artifacts.datasets"
+  ]
+}

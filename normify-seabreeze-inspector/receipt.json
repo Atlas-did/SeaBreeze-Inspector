@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "ok": true,
+  "project": "normify-seabreeze-inspector",
+  "compiled_at": "2026-09-30T13:32:38.611Z",
+  "stats": {
+    "tree_count": 1,
+    "module_count": 147,
+    "leaf_count": 113,
+    "api_count": 358,
+    "dep_count": 31,
+    "cross_tree_dep_count": 0,
+    "max_depth": 5,
+    "layout_count": 34,
+    "planned_count": 0,
+    "deprecated_count": 0,
+    "policy_rule_count": 2,
+    "change_count": 0,
+    "open_change_count": 0
+  },
+  "warnings": {
+    "structure/leaf-too-coarse": 15,
+    "structure/leaf-too-coarse-many": 1,
+    "layout/order-incomplete": 4,
+    "evidence/root-no-source": 1
+  },
+  "artifacts": {
+    "tree.json": {
+      "sha256": "269faa4c97441ffebc460359ea00765673f5bf0723ad2ae267c48cc10fa467f7",
+      "bytes": 426109
+    },
+    "outline.md": {
+      "sha256": "0d349eeb5f3223098c338ca22f95407dde865610558a6fcc34995144ff5ad808",
+      "bytes": 39944
+    },
+    "api-index.json": {
+      "sha256": "31853b09e6c53102ba02147920526e8252d9c787d41cc9a43560e1e4ad017730",
+      "bytes": 30683
+    },
+    "receipt.json": {
+      "sha256": "99a791300e8299443406fd5849d4db719cc9e2ecc082c7cea5e78aaa36442c74",
+      "bytes": 1050
+    }
+  }
+}

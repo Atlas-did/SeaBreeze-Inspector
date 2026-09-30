@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "id": "seabreeze-inspector.backend.core",
+  "updated_at": "2026-09-30T04:36:05.115Z",
+  "mode": "layers",
+  "reading": {
+    "zh": "从左到右的信号链：滤波器与积分分离提供基础信号处理 → EKF 观测风扰 → 前馈 PID 把扰动补偿进位置控制；RRT* 独立负责路径规划。",
+    "en": "Left-to-right signal chain: filters and integral separation provide base signal conditioning, the EKF observes wind disturbance, and the feedforward PID folds that compensation into position control; RRT* plans paths independently."
+  },
+  "order": [
+    "seabreeze-inspector.backend.core.filters",
+    "seabreeze-inspector.backend.core.ekf-disturbance",
+    "seabreeze-inspector.backend.core.feedforward-pid",
+    "seabreeze-inspector.backend.core.trajectory-rrt"
+  ]
+}

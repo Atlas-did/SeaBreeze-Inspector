@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "seabreeze-inspector.backend.simulation.http-bridge",
+  "updated_at": "2026-09-30T05:37:58.142Z",
+  "mode": "layers",
+  "reading": {
+    "zh": "处理器暴露 /api/state、/api/command、/api/log → 主循环推进仿真并广播 → 记录器写飞行 CSV。",
+    "en": "The handler exposes /api/state, /api/command and /api/log; the loop advances the simulation and broadcasts; the recorder writes the flight CSV."
+  },
+  "order": [
+    "seabreeze-inspector.backend.simulation.http-bridge.request-handler",
+    "seabreeze-inspector.backend.simulation.http-bridge.sim-loop",
+    "seabreeze-inspector.backend.simulation.http-bridge.flight-recorder"
+  ]
+}

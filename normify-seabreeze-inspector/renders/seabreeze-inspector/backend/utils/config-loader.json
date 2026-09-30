@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "seabreeze-inspector.backend.utils.config-loader",
+  "updated_at": "2026-09-30T05:38:05.790Z",
+  "mode": "layers",
+  "reading": {
+    "zh": "加载器负责定位/解析/缓存 → 强转与校验塑造取值 → 配置视图是调用方接触的接口。",
+    "en": "Loading locates, parses and caches; coercion and validation shape the values; the config view is what callers touch."
+  },
+  "order": [
+    "seabreeze-inspector.backend.utils.config-loader.loader-core",
+    "seabreeze-inspector.backend.utils.config-loader.type-coercion",
+    "seabreeze-inspector.backend.utils.config-loader.config-view"
+  ]
+}

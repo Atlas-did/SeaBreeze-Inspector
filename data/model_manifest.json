@@ -65,8 +65,26 @@
       "mtime_ns": 1786227724708515000,
       "mtime_utc": "2026-08-08T22:22:04Z",
       "sha256": "4b83f1f1739202ad099db83c6f35067c17bc2c3d004eb439ec0dba9390575b82",
-      "training": null,
-      "eval": null
+      "training": {
+        "model_series": null,
+        "dataset_version": null,
+        "input_size": 1280,
+        "epochs": 200,
+        "evidence": {
+          "input_size": "config/yolo_config.yaml (model.input_size=1280)",
+          "epochs": "config/yolo_config.yaml 注释 'V3: ... 200 epochs' —— 注释而非训练记录, 属未验证信息",
+          "note": "仓库内没有该权重的训练日志/记录, 模型系列与训练数据版本均未知"
+        }
+      },
+      "eval": null,
+      "deployment_target": true,
+      "release_candidate": false,
+      "provenance_gaps": [
+        "ID 指标不可引用: research/v5_2/report_id_val_20260901_141031.json 的 headline_val 为空, numbers_are_citable=False(仅 12 张采样)",
+        "ID 完整评测在本 checkout 无法进行: id_val 清单 381 张, 磁盘上 id_val/images/ 缺 380 张(实际图像位于 images/test/)",
+        "OOD 指标不存在: 对 seabreeze_v3.pt 没有任何 OOD 评测; ood_test 的 final slot 已被 v5_2_yolo11s_1024_seed42 占用(D7 一次性锁定), baseline slot 语义是'数据前基线', 不可挪用",
+        "训练来源缺失: 无模型系列、无训练数据版本、无训练记录文件"
+      ]
     }
   ]
 }

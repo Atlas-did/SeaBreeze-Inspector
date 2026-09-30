@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "id": "seabreeze-inspector.backend.arm",
+  "updated_at": "2026-09-30T04:36:14.530Z",
+  "mode": "layers",
+  "reading": {
+    "zh": "从左到右：运动学先做正/逆解算出关节角 → 串口控制器把角度变成 Arduino 固件指令下发。",
+    "en": "Kinematics solves forward/inverse pose first, then the serial controller turns joint angles into firmware commands over the Arduino link."
+  },
+  "order": [
+    "seabreeze-inspector.backend.arm.kinematics",
+    "seabreeze-inspector.backend.arm.controller"
+  ]
+}

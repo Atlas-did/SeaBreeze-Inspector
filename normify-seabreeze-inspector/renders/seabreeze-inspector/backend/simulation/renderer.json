@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "seabreeze-inspector.backend.simulation.renderer",
+  "updated_at": "2026-09-30T05:38:05.699Z",
+  "mode": "layers",
+  "reading": {
+    "zh": "先投影 → 再画场景（地面/风机/无人机/机械臂/路径/风粒子）→ 最后叠 HUD 与遥测面板。",
+    "en": "Projection first, then the scene itself (ground, turbine, drone, arm, path, wind), then the HUD and telemetry overlays."
+  },
+  "order": [
+    "seabreeze-inspector.backend.simulation.renderer.projection",
+    "seabreeze-inspector.backend.simulation.renderer.scene-draw",
+    "seabreeze-inspector.backend.simulation.renderer.panels"
+  ]
+}

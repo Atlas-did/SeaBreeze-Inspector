@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "id": "seabreeze-inspector.omnisim-assets",
+  "updated_at": "2026-09-30T06:00:21.626Z",
+  "mode": "layers",
+  "reading": {
+    "zh": "在 917 行的桥里自下而上：工具函数 → 风场模型与状态 → Tello 动力学 → 飞行控制器 → HTTP 入口与网格资产。",
+    "en": "Bottom-up inside the 917-line bridge: helpers, the wind model and state, Tello dynamics, the flight controller, then the HTTP entry and mesh assets."
+  },
+  "order": [
+    "seabreeze-inspector.omnisim-assets.protocol-helpers",
+    "seabreeze-inspector.omnisim-assets.wind-model-and-state",
+    "seabreeze-inspector.omnisim-assets.tello-dynamics",
+    "seabreeze-inspector.omnisim-assets.tello-controller",
+    "seabreeze-inspector.omnisim-assets.http-entry-and-mesh"
+  ]
+}

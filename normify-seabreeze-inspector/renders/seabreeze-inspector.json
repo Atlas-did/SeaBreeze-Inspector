@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "id": "seabreeze-inspector",
+  "updated_at": "2026-09-30T04:21:46.099Z",
+  "mode": "groups",
+  "reading": {
+    "zh": "从「运行主体」看起：backend 是全部算法与控制逻辑，web3d/frontend 是两条可视化通道，firmware 是真机执行端；「硬件与集成」是结构件与外部仿真的接入口；「验证与研发支撑」产出论文里可复现的数字与测试；「资料与数据」是文档和权重/数据集的落点。",
+    "en": "Start with Runtime System: backend holds all algorithms and control logic, web3d/frontend are the two visualisation channels, firmware is the real-hardware actuator end. Hardware & Integration covers the CAD parts and the external-simulation seam. Verification & R&D Support produces the reproducible numbers and tests. Documentation & Data records where docs and weights/datasets live."
+  },
+  "order": [
+    "seabreeze-inspector.backend",
+    "seabreeze-inspector.web3d",
+    "seabreeze-inspector.frontend",
+    "seabreeze-inspector.firmware",
+    "seabreeze-inspector.hardware-cad",
+    "seabreeze-inspector.omnisim-assets",
+    "seabreeze-inspector.configuration",
+    "seabreeze-inspector.verification",
+    "seabreeze-inspector.tests",
+    "seabreeze-inspector.tooling",
+    "seabreeze-inspector.research-ops",
+    "seabreeze-inspector.docs",
+    "seabreeze-inspector.artifacts"
+  ],
+  "groups": [
+    {
+      "id": "runtime",
+      "title": {
+        "zh": "运行主体",
+        "en": "Runtime System"
+      },
+      "children": [
+        "seabreeze-inspector.backend",
+        "seabreeze-inspector.web3d",
+        "seabreeze-inspector.frontend",
+        "seabreeze-inspector.firmware"
+      ]
+    },
+    {
+      "id": "hardware",
+      "title": {
+        "zh": "硬件与集成",
+        "en": "Hardware & Integration"
+      },
+      "children": [
+        "seabreeze-inspector.hardware-cad",
+        "seabreeze-inspector.omnisim-assets",
+        "seabreeze-inspector.configuration"
+      ]
+    },
+    {
+      "id": "quality",
+      "title": {
+        "zh": "验证与研发支撑",
+        "en": "Verification & R&D Support"
+      },
+      "children": [
+        "seabreeze-inspector.verification",
+        "seabreeze-inspector.tests",
+        "seabreeze-inspector.tooling",
+        "seabreeze-inspector.research-ops"
+      ]
+    },
+    {
+      "id": "knowledge",
+      "title": {
+        "zh": "资料与数据",
+        "en": "Documentation & Data"
+      },
+      "children": [
+        "seabreeze-inspector.docs",
+        "seabreeze-inspector.artifacts"
+      ]
+    }
+  ]
+}

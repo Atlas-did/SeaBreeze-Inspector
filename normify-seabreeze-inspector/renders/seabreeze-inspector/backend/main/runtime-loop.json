@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "seabreeze-inspector.backend.main.runtime-loop",
+  "updated_at": "2026-09-30T05:37:57.996Z",
+  "mode": "layers",
+  "reading": {
+    "zh": "先启动主循环并逐帧推进 → 注入传感器并产出控制输出 → 最后优雅关闭并落日志。",
+    "en": "Start the loop and step one frame; inject sensors and produce control output; shut down gracefully while logging."
+  },
+  "order": [
+    "seabreeze-inspector.backend.main.runtime-loop.start-and-frame",
+    "seabreeze-inspector.backend.main.runtime-loop.sensor-and-control",
+    "seabreeze-inspector.backend.main.runtime-loop.shutdown-and-log"
+  ]
+}

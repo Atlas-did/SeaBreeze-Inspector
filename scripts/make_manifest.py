@@ -198,8 +198,8 @@ def build_dataset_manifest(root: Path, data_roots, threshold_mb: float,
 
 
 #: 重新生成清单时允许"按内容继承"的人工登记字段 (见 model_entry 的保留规则)
-PROVENANCE_KEYS = ("training", "eval", "release_candidate",
-                   "registered_by", "registered_at", "notes")
+PROVENANCE_KEYS = ("training", "eval", "release_candidate", "deployment_target",
+                   "provenance_gaps", "registered_by", "registered_at", "notes")
 
 
 def model_entry(path: Path, root: Path, existing: dict = None) -> dict:

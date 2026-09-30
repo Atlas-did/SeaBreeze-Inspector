@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "id": "seabreeze-inspector.backend.utils",
+  "updated_at": "2026-09-30T04:27:39.088Z",
+  "mode": "groups",
+  "reading": {
+    "zh": "左组是无状态工具（配置加载、单位换算），右组是运行时设施（消息总线、飞行日志）；飞行日志复用配置里的 PROJECT_ROOT 定位输出目录。",
+    "en": "Left group holds stateless tools (config loading, unit conversion); right group holds runtime facilities (message bus, flight logging); the logger reuses PROJECT_ROOT from config to locate its output directory."
+  },
+  "order": [
+    "seabreeze-inspector.backend.utils.config-loader",
+    "seabreeze-inspector.backend.utils.units",
+    "seabreeze-inspector.backend.utils.message-bus",
+    "seabreeze-inspector.backend.utils.flight-logger"
+  ],
+  "groups": [
+    {
+      "id": "tools",
+      "title": {
+        "zh": "纯工具",
+        "en": "Pure Tools"
+      },
+      "children": [
+        "seabreeze-inspector.backend.utils.config-loader",
+        "seabreeze-inspector.backend.utils.units"
+      ]
+    },
+    {
+      "id": "runtime-facilities",
+      "title": {
+        "zh": "运行时设施",
+        "en": "Runtime Facilities"
+      },
+      "children": [
+        "seabreeze-inspector.backend.utils.message-bus",
+        "seabreeze-inspector.backend.utils.flight-logger"
+      ]
+    }
+  ]
+}

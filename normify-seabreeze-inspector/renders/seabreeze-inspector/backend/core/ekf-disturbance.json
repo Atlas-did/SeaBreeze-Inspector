@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "id": "seabreeze-inspector.backend.core.ekf-disturbance",
+  "updated_at": "2026-09-30T05:37:43.158Z",
+  "mode": "layers",
+  "reading": {
+    "zh": "先看矩阵（F/H）→ 再看使用它们的预测与更新步 → 最后是对外读出接口。",
+    "en": "Matrices first (F/H), then the predict and update steps that use them, then the read-out queries."
+  },
+  "order": [
+    "seabreeze-inspector.backend.core.ekf-disturbance.model-matrices",
+    "seabreeze-inspector.backend.core.ekf-disturbance.predict-update",
+    "seabreeze-inspector.backend.core.ekf-disturbance.queries"
+  ]
+}

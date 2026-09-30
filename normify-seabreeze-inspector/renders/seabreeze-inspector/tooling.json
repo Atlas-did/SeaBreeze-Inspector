@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "id": "seabreeze-inspector.tooling",
+  "updated_at": "2026-09-30T13:35:00.501Z",
+  "mode": "layers",
+  "reading": {
+    "zh": "从左到右：先搭环境 → 烧录固件 → HIL 冒烟（上机前的离线链路自检）→ 数据与体检工具 → 最后一段是发布链（清单生成 → 三个校验器 → 权重拉取/部署闸门）；kimi-relay 是与流程无关的旁路工具。",
+    "en": "Left to right: set the environment up, flash the board, run the HIL smoke check (offline link self-test before hardware), then the data and diagnostic utilities; the tail of the chain is release (manifest generation, the three verifiers, weight fetch and the deployment gate). kimi-relay is a side utility unrelated to the flow."
+  },
+  "order": [
+    "seabreeze-inspector.tooling.environment-setup",
+    "seabreeze-inspector.tooling.flash-firmware",
+    "seabreeze-inspector.tooling.hil-smoke",
+    "seabreeze-inspector.tooling.dataset-ops",
+    "seabreeze-inspector.tooling.diagnostics",
+    "seabreeze-inspector.tooling.manifest-generation",
+    "seabreeze-inspector.tooling.release-verifiers",
+    "seabreeze-inspector.tooling.weight-deployment-gates",
+    "seabreeze-inspector.tooling.kimi-relay"
+  ]
+}

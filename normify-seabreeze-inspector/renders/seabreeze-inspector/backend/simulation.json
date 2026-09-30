@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "id": "seabreeze-inspector.backend.simulation",
+  "updated_at": "2026-09-30T13:34:56.348Z",
+  "mode": "groups",
+  "reading": {
+    "zh": "模型、传输保真度、Pygame 主循环与渲染器构成被仿真的世界（传输层负责把理想链路变成有延迟/丢包/执行器滞后的现实链路）；HTTP 桥、无人机适配器与高度驱动器是让 Web 视图和控制器驱动它的接缝。",
+    "en": "Models, the transport fidelity layer, the Pygame loop and the renderer make up the simulated world - the transport layer turns an ideal link into a realistic one with delay, loss and actuator lag; the HTTP bridge, drone adapter and altitude driver are the seams that let the web view and the controller drive it."
+  },
+  "order": [
+    "seabreeze-inspector.backend.simulation.models",
+    "seabreeze-inspector.backend.simulation.transport-model",
+    "seabreeze-inspector.backend.simulation.pygame-loop",
+    "seabreeze-inspector.backend.simulation.renderer",
+    "seabreeze-inspector.backend.simulation.http-bridge",
+    "seabreeze-inspector.backend.simulation.drone-adapter",
+    "seabreeze-inspector.backend.simulation.altitude-driver"
+  ],
+  "groups": [
+    {
+      "id": "world",
+      "title": {
+        "zh": "物理世界与可视化",
+        "en": "World & Visualisation"
+      },
+      "children": [
+        "seabreeze-inspector.backend.simulation.models",
+        "seabreeze-inspector.backend.simulation.transport-model",
+        "seabreeze-inspector.backend.simulation.pygame-loop",
+        "seabreeze-inspector.backend.simulation.renderer"
+      ]
+    },
+    {
+      "id": "seam",
+      "title": {
+        "zh": "Web 接缝与适配器",
+        "en": "Web Seam & Adapters"
+      },
+      "children": [
+        "seabreeze-inspector.backend.simulation.http-bridge",
+        "seabreeze-inspector.backend.simulation.drone-adapter",
+        "seabreeze-inspector.backend.simulation.altitude-driver"
+      ]
+    }
+  ]
+}
