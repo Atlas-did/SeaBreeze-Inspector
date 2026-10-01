@@ -304,9 +304,40 @@ def test_frozen_heartbeat_reaches_timeout_land_and_kill_tiers():
 # G. 接线: 传感器延迟 (交付的就是 5 帧前的真值)
 # =============================================================================
 
-def test_delivered_telemetry_is_exactly_five_frames_old():
-    """latency=0.1, dt=0.02: 第 k 帧喂给 mc 的遥测 == 第 k-5 帧的真值。"""
+class _FrozenClock:
+    """不前进的墙钟 (只提供 time.time(), 即 FailsafeMonitor 唯一用到的时间源)。"""
+
+    def __init__(self, now):
+        self._now = now
+
+    def time(self):
+        return self._now
+
+
+def _freeze_safety_clock(monkeypatch, guard):
+    """把 FailsafeMonitor 的时间源冻结在**它自己的上次心跳**那一刻。
+
+    只替换时间源, 安全检查逻辑一行不改 —— 跳闸判定照跑, 但 elapsed 恒为 0,
+    等价于"这段仿真里墙钟没有走动", 因此本机的真实耗时/负载无法再影响结论。
+    (锚在上次心跳而不是 time.time(), 是为了冻结后立刻满足 elapsed=0 —— 否则
+    构造期已经花掉的墙钟会让安全层一上来就跳闸。)
+    """
+    import backend.mission.safety as safety_mod
+    monkeypatch.setattr(safety_mod, "time", _FrozenClock(guard._last_heartbeat))
+
+
+def test_delivered_telemetry_is_exactly_five_frames_old(monkeypatch):
+    """latency=0.1, dt=0.02: 第 k 帧喂给 mc 的遥测 == 第 k-5 帧的真值。
+
+    脆弱点及其处理: FailsafeMonitor 用**墙钟** time.time() 算心跳间隔, 慢 runner
+    上这几十帧真可能花掉 > timeout_land=1.0s (CI 实测 1.3s/1.6s), 安全层按设计
+    跳闸 LAND -> 机体下降、高度塌陷 -> 末尾"有延迟也不会卡死"的断言失真。这里
+    冻结安全层的时间源, 把墙钟因素显式排除; 超时跳闸本身由
+    test_frozen_heartbeat_reaches_timeout_land_and_kill_tiers 用回拨时间戳做
+    确定性验证 (两用例互补: 一个排除跳闸, 一个专门制造跳闸)。
+    """
     rt = _make_runtime(sensor_latency_s=0.1)
+    _freeze_safety_clock(monkeypatch, rt.mc.safety_guard)
     rt.step(DT, {"Space"})
     hist, delivered = [], []
     for _ in range(40):

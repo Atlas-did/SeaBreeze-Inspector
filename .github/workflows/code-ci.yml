@@ -69,19 +69,23 @@ jobs:
 
       - name: Tests (Ubuntu, xvfb)
         if: runner.os == 'Linux'
+        timeout-minutes: 25
         env:
           SDL_VIDEODRIVER: dummy
           PYTHONIOENCODING: utf-8
           PYTHONUTF8: 1
-        run: xvfb-run -a python -m pytest tests/ -v --tb=short
+        # 审计 D10: 之前用 `-v --tb=short` 整轮跑 15–25 分钟, 失败后日志里要翻很久才找到用例。
+        # 现在: -x 首个失败即停(快速反馈) + --durations=15 打出最慢用例 + --timeout=120 卡死即报。
+        run: xvfb-run -a python -m pytest tests/ -q -x --tb=short --durations=15 --timeout=120
 
       - name: Tests (Windows headless)
         if: runner.os == 'Windows'
+        timeout-minutes: 25
         env:
           SDL_VIDEODRIVER: dummy
           PYTHONIOENCODING: utf-8
           PYTHONUTF8: 1
-        run: python -m pytest tests/ -v --tb=short
+        run: python -m pytest tests/ -q -x --tb=short --durations=15 --timeout=120
 
       - name: Sim headless smoke test
         env:

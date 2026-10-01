@@ -44,7 +44,8 @@
 - **连接失败路径**：先不接 Tello，确认 `HARDWARE_FAULT` 且**任务不启动**（不降级为模拟）。
 - **视觉不可用路径**：把 `config/yolo_config.yaml` 的权重路径改成不存在的文件，确认 `vision_status=VISION_UNAVAILABLE`，且 `request_state("INSPECT")` 被拒。
 - **定位闸门**：不接外部定位，确认 `localization_available()=False` 且 NAVIGATE/INSPECT/RETURN 全被拒。
-- **速度指令到达**：`set_velocity` 后确认底层确实收到 `send_rc_control`（先用 `scripts/hil_smoke.py` 的离线模式验证，再上机看日志）。
+- **速度指令契约（未飞行时应被拒绝）**：地面状态下调 `set_velocity()` 必须**返回 False**（`tello_basic.py:478-479` 的真机契约）。
+  ⚠ 注意：**不要**在 L1-A 里断言"指令到达底层" —— 未进入 `HOVERING/MOVING` 时真机实现按契约直接返回 False，那属于 L1-B（会转动电机）。离线可先用 `scripts/hil_smoke.py` 的假 Tello 验证"指令确实走到 `send_rc_control`"（不接硬件）。
 - **停桨闸门（拒绝分支）**：高度未知时调用 `kill()`，确认**拒绝执行**并打印明确错误。
 - **遥测看门狗**：断开 Tello Wi‑Fi，确认在 `timeout_land/kill` 量级内触发保护，且 `telemetry_fresh=False`。
 - **机械臂**：`capabilities()` 打印；ACK 开启时（`wait_ack=True`）确认收到固件 ACK 才返回 True；拔掉串口确认返回 False（**不得假成功**）。
@@ -56,14 +57,17 @@
 ### L1-B 会触发飞行原语类（**电机会转** —— 桨叶必须已拆除、机体固定、人离开旋翼平面）
 
 - **起飞原语可达性**：`takeoff()` 确实下发（电机起转、日志可见），随后立即 `land()`。
-- **受控下降闭环**：空中触发 `mark_fault()` → `emergency_descent()` 被调用**且检查返回值**；
-  降到 ≤30cm 后自动 `land()` 收尾；落地后**不再**下发动作。
+- **受控下降的"反复下发 + 检查结果"**（**措辞修正 D6**：`emergency_descent()` 即使**超时未确认低空也返回 True**，
+  即返回值只证明"例程跑完了"，**不证明飞机确实下降了** —— 见 `tello_basic.py:380-390`）：
+  空中触发 `mark_fault()` → 确认 `emergency_descent()` 被反复调用、返回值被检查；
+  降到 ≤30cm 且确认不再飞行后自动 `land()` 收尾；**落地后不再下发动作**；
+  并记录**高度回读序列**作为"确实下降了"的证据（不能只看返回值）。
 - **下降能力缺失的升级**：使底层返回 False，确认打印"受控下降未推进…需要飞控级 failsafe 或外部急停"。
 - **停桨闸门（允许分支）**：只有高度已知且 ≤30cm 时才真正停桨。
 
 ### 步骤
 1. 桨叶拆除，机体固定（L1-B 尤其重要）；接通 Arduino/PCA9685 与 Tello。
-2. 启动：`python backend/main.py --mode hardware`（真机模式）。
+2. 启动：`python -m backend.main --mode hardware`（真机模式）。
    **注意**：CLI 只接受 `simulation` / `hardware` 两个取值，本文档早先写的 `--mode real` 是错的。
 3. 先做完 **L1-A** 全部项目并记录；再做 **L1-B**，每项前后确认桨叶状态与人员位置。
 4. 记录到 `docs/hil_records/props_off_TEMPLATE.md`（模板已按 A/B 分类）。
@@ -81,7 +85,7 @@
 
 ### 步骤
 1. 系留绳固定，长度 ≤1.5 m；空域清空；操作人手握急停手段。
-2. `python backend/main.py --mode hardware`；确认 `localization_available()=False`（**无外部定位时不应允许自动导航** —— 这正是预期）。
+2. `python -m backend.main --mode hardware`；确认 `localization_available()=False`（**无外部定位时不应允许自动导航** —— 这正是预期）。
 3. 手动起飞到 0.5–1.0 m：记录高度保持的**实测**均值/最大偏差（用飞行日志 CSV，不要凭肉眼）。
 4. **受控下降**：触发 `EMERGENCY`，确认按分帧脉冲下降且**不砍桨**；触地后进 `IDLE`。
 5. **急停**：高度 >30cm 时调用 `kill()` → 必须**被拒绝**；降到 ≤30cm 后调用 → 允许。

@@ -25,23 +25,26 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-import cv2
-import cv2.aruco as aruco
+# 以下导入必须在 sys.path 引导之后 (E402 由引导本身造成, 非笔误)
+import cv2  # noqa: E402
+import cv2.aruco as aruco  # noqa: E402
 
-from backend.localization.aruco_source import (
+from backend.localization.aruco_source import (  # noqa: E402
     ArucoLocalizationSource,
     localization_quality,
     marker_corners_local,
     marker_count_to_quality,
     reprojection_error_to_quality,
 )
-from backend.localization.base import (
+from backend.localization.base import (  # noqa: E402
     MAX_AGE_S,
     MIN_QUALITY,
     LocalizationObservation,
     LocalizationSource,
 )
-from backend.localization.ground_truth_source import GroundTruthLocalizationSource
+from backend.localization.ground_truth_source import (  # noqa: E402
+    GroundTruthLocalizationSource,
+)
 
 # --- 合成场景参数 ---------------------------------------------------------
 CAMERA_MATRIX = np.array([[900.0, 0.0, 320.0],
@@ -271,22 +274,107 @@ def test_invalid_observations_are_unusable():
 
 
 # --- 4. 真值源 (仿真/HIL/接线验证) ---------------------------------------
+class FakeClock:
+    """可注入时钟: 精确控制"读取时刻", 与墙钟/平台时钟粒度无关。"""
+
+    def __init__(self, t0=1000.0):
+        self.t = float(t0)
+
+    def __call__(self):
+        return self.t
+
+    def advance(self, dt):
+        self.t += float(dt)
+        return self.t
+
+
 def test_ground_truth_source_contract():
-    """真值源: quality=1.0、时间戳严格单调、位置可注入、provider 模式可用。"""
-    src = GroundTruthLocalizationSource([10.0, -5.0, 100.0])
+    """真值源: quality=1.0、时间戳不倒退且不超前、位置可注入、provider 可用。"""
+    clock = FakeClock()
+    src = GroundTruthLocalizationSource([10.0, -5.0, 100.0], now_fn=clock)
     obs = [src.read() for _ in range(5)]
     ts = [o.timestamp for o in obs]
-    assert all(b > a for a, b in zip(ts, ts[1:])), "时间戳必须严格单调"
+    # 不倒退即可: 粗粒度单调时钟(≤3.12/Windows, ~15.6 ms)上同一 tick 内
+    # "严格递增"必然把时间戳推到未来 => age < 0 => is_usable() 自拒最新真值。
+    # 真正的前提是"不倒退 + 不超前", 与时钟粒度无关。
+    assert all(b >= a for a, b in zip(ts, ts[1:])), "时间戳不得倒退"
+    assert all(o.timestamp <= clock.t for o in obs), "时间戳不得超前于读取时刻"
+    assert len({id(o) for o in obs}) == 5, "每次 read() 必须生成新观测"
     assert all(o.quality == 1.0 for o in obs)
     assert all(o.source == "ground-truth" for o in obs)
-    assert all(o.is_usable() for o in obs) and src.is_healthy()
+    assert all(o.is_usable(now=clock.t) for o in obs) and src.is_healthy()
     assert np.allclose(obs[-1].position, [10.0, -5.0, 100.0])
 
     src.set_position([1.0, 2.0, 3.0])
     assert np.allclose(src.read().position, [1.0, 2.0, 3.0])
 
     holder = {"p": np.array([7.0, 8.0, 9.0])}
-    hil = GroundTruthLocalizationSource(provider=lambda: holder["p"])
+    hil = GroundTruthLocalizationSource(provider=lambda: holder["p"], now_fn=clock)
     assert np.allclose(hil.read().position, [7.0, 8.0, 9.0])
     holder["p"] = np.array([1.0, 1.0, 1.0])
     assert np.allclose(hil.read().position, [1.0, 1.0, 1.0])
+
+
+def test_ground_truth_source_is_wall_clock_independent():
+    """源创建后无论过多久才读, read() 都给"此刻"的可用观测。
+
+    真值源的语义是"此刻的真值": 源对象里没有任何构造期快照会随时间过期。
+    同时保留 fail-closed: 一旦某条观测真的变旧(以它自己的时间戳算), 仍被判不可用。
+    """
+    clock = FakeClock()
+    src = GroundTruthLocalizationSource([5.0, 6.0, 7.0], now_fn=clock)
+    first = src.read()
+    clock.advance(3600.0)                       # 远超 MAX_AGE_S = 0.3 s
+    later = src.read()
+    assert later.is_usable(now=clock.t), "创建 1 小时后再读必须仍然可用"
+    assert later.age(now=clock.t) == pytest.approx(0.0)
+    assert not first.is_usable(now=clock.t), "旧观测仍必须过期(真值源不豁免有效期)"
+    assert later.timestamp > first.timestamp
+    assert src.is_healthy()
+
+
+def test_ground_truth_source_survives_coarse_monotonic_clock():
+    """回归 CI win/3.11: 粗粒度单调时钟下连续 read() 必须全部可用。
+
+    CPython <= 3.12 在 Windows 上 time.monotonic() 取 GetTickCount64 (~15.6 ms),
+    ubuntu 为 ns 粒度 —— 这正是"只有 ubuntu 腿通过"的原因。修复前同一 tick 内
+    第二次 read() 的时间戳被 +1e-6 推到未来 => age < 0 => 已接入的定位源被
+    read_localization() 判为不可用 (LOCALIZATION_UNAVAILABLE)。
+    """
+    tick = 15.625e-3
+    base = time.monotonic()
+
+    def coarse():
+        return base + int((time.monotonic() - base) / tick) * tick
+
+    src = GroundTruthLocalizationSource([1.0, 2.0, 3.0], now_fn=coarse)
+    obs = [src.read() for _ in range(20)]
+    assert all(o.age() >= 0.0 for o in obs), "时间戳不得超前于时钟"
+    assert all(o.is_usable() for o in obs), "同一 tick 内的读取不得被自己判为过期"
+    assert src.is_healthy()
+    assert len({o.timestamp for o in obs}) <= 4, "同一 tick 内时间戳允许相等"
+
+
+def test_ground_truth_source_clock_skew_is_fail_closed():
+    """反向用例: 源时钟超前 => 观测是"未来" => 不可用 (fail-closed)。"""
+    real = time.monotonic()
+    src = GroundTruthLocalizationSource([1.0, 2.0, 3.0], now_fn=lambda: real + 10.0)
+    obs = src.read()
+    assert obs.age(now=real) < 0.0
+    assert not obs.is_usable(now=real), "未来时间戳不得被当成'永远新鲜'"
+
+
+def test_ground_truth_source_never_fabricates_when_truth_missing():
+    """拿不到真值时返回 None, 绝不返回占位坐标。"""
+    src = GroundTruthLocalizationSource(provider=lambda: None)
+    assert src.read() is None
+    assert not src.is_healthy()
+
+
+def test_ground_truth_source_timestamps_never_go_backwards():
+    """时钟回拨: 时间戳单调不减, 不得倒退。"""
+    seq = iter([100.0, 100.0, 90.0, 95.0])
+    src = GroundTruthLocalizationSource(now_fn=lambda: next(seq))
+    ts = [src.read().timestamp for _ in range(4)]
+    assert ts == sorted(ts), "时间戳必须单调不减"
+    assert ts == [100.0, 100.0, 100.0, 100.0]

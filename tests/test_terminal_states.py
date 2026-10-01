@@ -38,12 +38,23 @@ def _mc(mock=True):
 
 
 class FakeDrone:
-    """记录调用的假机体 (覆盖 mark_fault / 有效性检查用到的接口)。"""
+    """记录调用的假机体。
 
-    def __init__(self, flying=True, height_known=True, telemetry_fresh=True):
+    **替身保真度铁律**（第四轮审计 D1 的血的教训）：替身必须复刻真机的**状态机与失败路径**，
+    不能把 `is_flying` 写成"永远为真"的普通属性。这里：
+      * `land()` 失败时**返回 False 并把 `is_flying` 置 False** —— 与 `TelloController` 一致
+        （真机 `land()` 异常 -> 转 EMERGENCY -> `is_flying`(property) 变 False, tello_basic.py:287-289/730-732）；
+      * 失败同时让高度变为"不可信"，复刻"降落失败后高度读数不可依赖"的现实。
+    """
+
+    def __init__(self, flying=True, height_known=True, telemetry_fresh=True,
+                 height=100.0, land_ok=True, descent_ok=True):
         self.is_flying = flying
         self._height_known = height_known
         self._telemetry_fresh = telemetry_fresh
+        self._height = float(height)
+        self._land_ok = land_ok
+        self._descent_ok = descent_ok
         self.calls = []
         self.descent_args = []
 
@@ -57,9 +68,19 @@ class FakeDrone:
     def emergency_descent(self, *a, **kw):
         self.calls.append("emergency_descent")
         self.descent_args.append(kw)
+        if self._descent_ok and self._height > 0:
+            self._height = max(0.0, self._height - 20.0)   # 每帧下降 20cm, 便于模拟到低空
+        return self._descent_ok
 
     def land(self):
         self.calls.append("land")
+        if not self._land_ok:
+            self.is_flying = False        # 真机 land 失败 -> 进 EMERGENCY -> is_flying False
+            self._height_known = False    # 且此后高度不再可信
+            return False
+        self.is_flying = False
+        self._height = 0.0
+        return True
 
     def motor_cutoff(self, reason=""):
         self.calls.append("motor_cutoff")
@@ -69,13 +90,13 @@ class FakeDrone:
         return self._height_known
 
     def get_height(self):
-        return 100
+        return self._height
 
     def get_battery(self):
         return 80
 
     def get_state_dict(self):
-        return {"battery": 80, "height": 100}
+        return {"battery": 80, "height": int(self._height)}
 
     def get_attitude(self):
         return {}
@@ -146,17 +167,19 @@ def test_request_state_rejects_unknown_state_names():
 # 3) 复位: 唯一出口, 且飞行中禁止
 # =============================================================================
 
-def test_clear_fault_is_refused_while_flying():
-    mc = _mc()
-    mc.drone = FakeDrone(flying=True)
+def test_clear_fault_is_refused_without_grounded_evidence():
+    """D2: 没有**正面落地证据**时拒绝复位（仍在飞 且 高度 100cm）。"""
+    mc = _mc(mock=False)
+    mc.drone = FakeDrone(flying=True, height=100.0)
     mc.mark_fault("空中故障")
     assert mc.clear_fault("尝试复位") is False
     assert mc.state == "FAULT"
 
 
-def test_clear_fault_resets_to_idle_on_the_ground():
-    mc = _mc()
-    mc.drone = FakeDrone(flying=False)
+def test_clear_fault_resets_to_idle_when_grounded():
+    """D2: 高度可信且 <=30cm 且不再飞行才算落地 —— 此时允许复位。"""
+    mc = _mc(mock=False)
+    mc.drone = FakeDrone(flying=False, height=10.0)
     mc.mark_fault("地面故障")
     assert mc.clear_fault("人工复位") is True
     assert mc.state == "IDLE"
@@ -449,3 +472,67 @@ def test_simulation_height_is_trusted():
     """仿真由物理模型给出高度, 恒为可信(此改动不影响仿真路径)。"""
     mc = _mc(mock=True)
     assert mc.height_is_known() is True
+
+
+# =============================================================================
+# 11) 第四轮审计 D1/D2: 降落失败不得记成成功; 复位必须有落地证据
+# =============================================================================
+
+def test_fault_land_failure_is_not_recorded_as_success():
+    """D1: land() 返回 False 时不得置 `_fault_land_requested`, 且之后必须仍会重试。"""
+    mc = _mc(mock=False)
+    drone = FakeDrone(flying=True, height=10.0, land_ok=False)
+    mc.drone = drone
+    mc.mark_fault("空中故障")
+
+    drone.calls.clear()
+    mc._handle_state_machine(np.zeros(3))              # 低空 -> 尝试 land()
+    assert "land" in drone.calls, "低空确认后未尝试收尾降落"
+    assert mc._fault_land_requested is False, "降落失败被记成了成功"
+    assert mc._fault_land_failures >= 1, "降落失败未被计数"
+
+    before = drone.calls.count("land")                 # 失败后不得永久放弃
+    for _ in range(mc.FAULT_LAND_RETRY_FRAMES + 2):
+        mc._handle_state_machine(np.zeros(3))
+    assert drone.calls.count("land") > before, "land() 失败后再未重试"
+
+
+def test_fault_treats_unknown_height_as_airborne_even_when_not_flying():
+    """D1: is_flying 为 False(真机降落失败转 EMERGENCY 的情形)但高度未知时仍需继续下降。"""
+    mc = _mc(mock=False)
+    drone = FakeDrone(flying=False, height_known=False)
+    mc.drone = drone
+    mc.state = "FAULT"
+    mc._terminal_latched = True
+
+    drone.calls.clear()
+    mc._handle_state_machine(np.zeros(3))
+    assert "emergency_descent" in drone.calls,         "高度未知时被 is_flying=False 骗过, 停止了安全动作: {}".format(drone.calls)
+
+
+def test_fault_landing_success_then_grounded_allows_reset():
+    """D1+D2 合起来: 收尾降落成功 -> 高度归零 -> 才允许复位。"""
+    mc = _mc(mock=False)
+    drone = FakeDrone(flying=True, height=10.0, land_ok=True)
+    mc.drone = drone
+    mc.mark_fault("故障")
+
+    drone.calls.clear()
+    for _ in range(3):
+        mc._handle_state_machine(np.zeros(3))
+    assert mc._fault_land_requested is True
+    assert drone.calls.count("land") == 1, "收尾降落应只下发一次, 实际 {}".format(drone.calls)
+    assert mc.clear_fault("落地后复位") is True
+    assert mc.state == "IDLE"
+
+
+def test_clear_fault_requires_operator_confirmation_when_height_unknown():
+    """D2: 高度不可知时默认拒绝复位; 只有操作员显式确认才放行。"""
+    mc = _mc(mock=False)
+    mc.drone = FakeDrone(flying=False, height_known=False)
+    mc.mark_fault("故障")
+
+    assert mc.clear_fault("无依据复位") is False
+    assert mc.state == "FAULT"
+    assert mc.clear_fault("操作员确认", operator_confirmed=True) is True
+    assert mc.state == "IDLE"

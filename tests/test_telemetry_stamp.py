@@ -51,13 +51,40 @@ def test_install_state_stamp_injects_arrival_time():
     assert RX_STAMP_FIELD in out2
 
 
-def test_exact_stamp_marks_fresh_when_fields_are_identical():
-    """关键边角: 字段逐一相同(完全静止悬停)时, 时间戳推进仍算收到新包。"""
+class _FakeMonotonicClock:
+    """可控单调时钟: 只由测试推进, 与真实流逝无关。"""
+
+    def __init__(self, now=1000.0):
+        self.now = now
+
+    def __call__(self):
+        return self.now
+
+
+def _inject_monotonic_clock(monkeypatch, start=1000.0):
+    """把 tello_basic 的时间源换成可控时钟 (生产代码一行不改)。"""
+    import backend.drone.tello_basic as tb
+
+    clock = _FakeMonotonicClock(start)
+    monkeypatch.setattr(tb.time, "monotonic", clock)
+    return clock
+
+
+def test_exact_stamp_marks_fresh_when_fields_are_identical(monkeypatch):
+    """关键边角: 字段逐一相同(完全静止悬停)时, 时间戳推进仍算收到新包。
+
+    脆弱点及其处理: 原写法靠两次 time.monotonic() 真的取到不同的值来制造"推进"。
+    Windows 上 CPython<3.13 的 monotonic 走 GetTickCount64 (粒度约 15.6ms), 相邻
+    两次调用常返回**同一个值** -> 被判成"时间戳未推进"(这对生产逻辑是正确判定,
+    对用例是假失败): CI 上即 assert 1 == 1+1。这里注入可控时钟并**显式推进**
+    时间戳, 不再依赖真实时间流逝 (也不放宽 1.0s 新鲜度阈值)。
+    """
+    clock = _inject_monotonic_clock(monkeypatch, start=1000.0)
     c = TelloController(mock=False)
     fake = _FakeTello()
     c._tello = fake
 
-    fake.state_dict = {"h": 100, "bat": 90, RX_STAMP_FIELD: time.monotonic()}
+    fake.state_dict = {"h": 100, "bat": 90, RX_STAMP_FIELD: clock.now}
     c.get_height()
     assert c.has_fresh_telemetry(1.0) is True
 
@@ -67,7 +94,8 @@ def test_exact_stamp_marks_fresh_when_fields_are_identical():
     assert c.telemetry_packet_count == n, "同一包不得被重复计数"
 
     # 时间戳推进(新包), 但所有业务字段都不变 -> 必须算新包
-    fake.state_dict = {"h": 100, "bat": 90, RX_STAMP_FIELD: time.monotonic()}
+    clock.now += 0.02
+    fake.state_dict = {"h": 100, "bat": 90, RX_STAMP_FIELD: clock.now}
     c.get_height()
     assert c.telemetry_packet_count == n + 1, "时间戳推进必须算新包"
     assert c.has_fresh_telemetry(1.0) is True

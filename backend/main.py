@@ -101,7 +101,9 @@ class MissionController:
         self._last_localization = None         # 最近一次可用观测 (供状态汇报)
         self._telemetry_stale = False          # 本帧遥测是否陈旧 (供状态汇报, 不被消费)
         self._fault_descent_started = False    # FAULT 时是否已发起受控下降
-        self._fault_land_requested = False     # FAULT 收尾: 是否已请求 land()
+        self._fault_land_requested = False     # FAULT 收尾: 是否已成功下发 land()
+        self._fault_land_failures = 0          # FAULT 收尾: land() 未成功的次数
+        self._fault_land_retry = 0             # FAULT 收尾: 重试帧计数
         self._fault_descent_failures = 0       # 终态下降"未推进"的计数(限频告警)
         self._terminal_latched = False         # 终态闩锁: 只能 clear_fault() 解锁
         self._video_last_obj = None            # 视频冻结检测: 上一帧对象
@@ -279,7 +281,13 @@ class MissionController:
         # =====================================================================
         # 3. EKF预测+更新 (传入已知控制输入以分离扰动估计)
         # =====================================================================
-        self.ekf.predict(u=self._last_control_output)
+        # 审计 D3(我方核验发现): 此处**不能**传 `_last_control_output` —— 它是控制器的
+        # **速度指令(cm/s)**(见 _send_control 的注释), 而 EKF 的 u 语义是**控制加速度(cm/s²)**:
+        # `predict` 会把加速度状态直接设成 u 并把其协方差压到 0.01, 量纲/语义错了会**静默**
+        # 污染 d̂ = IMU − u。
+        # 真机当前没有可用的"控制加速度"量 ⇒ 传 None, 让 EKF 自行估计 a 与 d(诚实);
+        # 仿真/mock 由 SimRuntime 回喂真实控制加速度(见 update_with_external_data)。
+        self.ekf.predict(u=self._last_control_accel if self.mock else None)
         if z is not None:
             # 真机路径同样带测量年龄: 遥测包可能已经"旧"了一段时间才被消费。
             self.ekf.update(z, age_s=self._telemetry_age_s())
@@ -333,26 +341,29 @@ class MissionController:
         detections = []
 
         # ---------- FAULT / MISSION_FAILED: 终态, 但**安全动作必须继续执行** ----------
-        # 第三轮审计 P0: 终态不等于"什么都不做", 而且下降必须是**闭环**:
-        #   1) 高度可确认且已到低空 -> 调 land() 收尾(emergency_descent 不会自己 land);
-        #   2) 否则推进一次受控下降, 并**检查返回值** —— False = 无下降能力, 必须升级告警;
-        #   3) 只有彻底落地(或本来就没起飞)才停手。
+        # 第三轮审计: 终态不等于"什么都不做"。
+        # 第四轮审计 D1: 判"是否还在空中"**不能只看 is_flying** —— 真机 land() 失败会转入
+        # EMERGENCY, 而 is_flying 在 EMERGENCY 下是 False, 于是整套下降/收尾逻辑被跳过。
+        # 这里改为 **fail-closed**:
+        #   高度不可信(None) 或 >30cm  ⇒ 一律当作"仍在空中", 继续推进下降;
+        #   高度可信且 <=30cm          ⇒ 请求 land() 收尾, 且**必须检查返回值**。
         if self.state in self.FAILURE_STATES:
             self._pending_control = np.zeros(3)
-            if getattr(self.drone, "is_flying", False):
-                height = self._safe_height_cm()
-                if height is not None and height <= self.FAULT_LAND_HEIGHT_CM:
-                    if not getattr(self, "_fault_land_requested", False):
-                        land = getattr(self.drone, "land", None)
-                        if callable(land):
-                            try:
-                                land()
-                                self._fault_land_requested = True
-                                print("[FAULT] 已确认低空({:.0f}cm) -> 请求降落收尾".format(height))
-                            except Exception as e:
-                                print("[FAULT] 降落调用失败: {}".format(e))
-                else:
-                    self._fault_descend_step()
+            height = self._safe_height_cm()
+            low = (height is not None and height <= self.FAULT_LAND_HEIGHT_CM)
+            if low:
+                if not getattr(self.drone, "is_flying", False):
+                    pass                                  # 落地已确认(低空 + 不再飞行) -> 停手
+                elif not getattr(self, "_fault_land_requested", False):
+                    self._request_fault_landing(height)    # 低空但仍在飞 -> 收尾降落
+            else:
+                # 高度未知 或 仍偏高: fail-closed 当作**仍在空中**, 继续推进下降
+                self._fault_descend_step()
+                # land() 曾失败过时不永久放弃: 每 N 帧重试一次收尾
+                self._fault_land_retry = getattr(self, "_fault_land_retry", 0) + 1
+                if (getattr(self, "_fault_land_failures", 0) > 0
+                        and self._fault_land_retry % self.FAULT_LAND_RETRY_FRAMES == 0):
+                    self._request_fault_landing(height)
             return detections, self._pending_control
 
         # ---------- IDLE: 等待指令 ----------
@@ -839,6 +850,8 @@ class MissionController:
 
     #: 终态下降的收尾高度(cm): 确认低于它以后改为请求 land() 收尾
     FAULT_LAND_HEIGHT_CM = 30.0
+    #: land() 失败后, 每隔多少帧重试一次收尾(而不是永久放弃)
+    FAULT_LAND_RETRY_FRAMES = 25
 
     def height_is_known(self) -> bool:
         """当前高度是否可信。
@@ -911,6 +924,34 @@ class MissionController:
             self._note_fault_descent_failure("emergency_descent 返回 False(无下降能力)")
             return False
         self._fault_descent_started = True
+        return True
+
+    def _request_fault_landing(self, height) -> bool:
+        """终态收尾: 请求降落。返回**是否成功下发**(不代表已触地)。
+
+        第四轮审计 D1: 原实现不看 `land()` 返回值就置 `_fault_land_requested = True`。
+        真机 `land()` 失败时**返回 False 并转入 EMERGENCY**(tello_basic.py:287-289),
+        于是"降落失败"被记成"已收尾", 之后永远不再尝试。
+        """
+        land = getattr(self.drone, "land", None)
+        if not callable(land):
+            self._fault_land_failures = getattr(self, "_fault_land_failures", 0) + 1
+            return False
+        try:
+            ok = land()
+        except Exception as e:
+            ok = False
+            print("[FAULT] land() 抛异常: {}".format(e))
+        if ok is False:
+            self._fault_land_failures = getattr(self, "_fault_land_failures", 0) + 1
+            self._fault_land_requested = False        # 关键: 失败不记为成功
+            if self._fault_land_failures == 1 or self._fault_land_failures % 5 == 0:
+                print("[FAULT] land() 未成功(第 {} 次) -> 继续尝试受控下降".format(
+                    self._fault_land_failures))
+            return False
+        self._fault_land_requested = True
+        print("[FAULT] 已确认低空({}) -> land() 已下发".format(
+            "未知" if height is None else "{:.0f}cm".format(height)))
         return True
 
     def _note_video_frame(self) -> None:
@@ -1147,28 +1188,41 @@ class MissionController:
         print("[FAULT] {} (空中={}, 受控下降={})".format(
             reason, flying, self._fault_descent_started))
 
-    def clear_fault(self, reason: str = "人工复位") -> bool:
+    def clear_fault(self, reason: str = "人工复位",
+                    operator_confirmed: bool = False) -> bool:
         """**唯一**离开 FAULT/MISSION_FAILED 终态的入口 (审计第 1 条)。
 
-        安全约束: 只允许在**未起飞**时复位 —— 空中不允许一键把终态清成 IDLE,
-        否则就是绕过安全设计。空中应当先完成受控下降。
+        第四轮审计 D2: 原实现用 `not is_flying` 当作"已落地"的证据, 但真机降落失败后
+        状态是 EMERGENCY, 而 `is_flying` 在 EMERGENCY 下**也是 False** —— 判据失效。
+        现在要求**正面的落地证据**:
+          * 高度可信且 <= 30cm  ⇒ 允许复位;
+          * 否则必须由操作员显式确认(`operator_confirmed=True`, 例如目视/称重确认)。
         """
         if not (self.state in self.FAILURE_STATES
                 or getattr(self, "_terminal_latched", False)):
             print("[WARN] 当前状态 {} 不是终态(且未闩锁), 无需复位".format(self.state))
             return False
-        if bool(getattr(self.drone, "is_flying", False)):
-            print("[ERROR] 拒绝在飞行中复位终态: 请先完成受控下降再复位")
+        height = self._safe_height_cm()
+        grounded = (height is not None
+                    and height <= self.FAULT_LAND_HEIGHT_CM
+                    and not bool(getattr(self.drone, "is_flying", False)))
+        if not grounded and not operator_confirmed:
+            print("[ERROR] 拒绝复位终态: 无法确认已落地(高度={}) —— 需要操作员确认 "
+                  "clear_fault(operator_confirmed=True)".format(
+                      "未知" if height is None else "{:.0f}cm".format(height)))
             return False
         prev = self.state
         self._fault_reason = None
         self._mission_failed_reason = None
         self._fault_descent_started = False
         self._fault_land_requested = False
+        self._fault_land_failures = 0
+        self._fault_land_retry = 0
         self._fault_descent_failures = 0
         self._terminal_latched = False          # 先解锁, 再走统一入口
         self._set_state("IDLE", reason, force=True, allow_terminal_exit=True)
-        print("[MAIN] 终态复位: {} → IDLE ({})".format(prev, reason))
+        print("[MAIN] 终态复位: {} → IDLE ({}, 高度={})".format(
+            prev, reason, "未知" if height is None else "{:.0f}cm".format(height)))
         return True
 
     def takeoff(self, height: float = 100.0):

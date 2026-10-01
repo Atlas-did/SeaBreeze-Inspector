@@ -28,7 +28,7 @@
 | A1 | 不接 Tello 启动 | `HARDWARE_FAULT`，任务不启动，**不降级为模拟** | | ☐通过 ☐失败 ☐未测 |
 | A2 | 权重路径改为不存在 | `vision_status=VISION_UNAVAILABLE`；`request_state("INSPECT")` 被拒 | | ☐ ☐ ☐ |
 | A3 | 不接外部定位 | `localization_available()=False`；NAVIGATE/INSPECT/RETURN 全被拒 | | ☐ ☐ ☐ |
-| A4 | `set_velocity` | 底层确收到 `send_rc_control`（贴日志片段） | | ☐ ☐ ☐ |
+| A4 | 地面调 `set_velocity` | **返回 False**（真机未飞行时的契约，`tello_basic.py:478`）；"指令到达底层"属 B 类或 `hil_smoke.py` 离线路径 | | ☐ ☐ ☐ |
 | A5 | 高度未知时 `kill()` | **拒绝**执行 + 明确错误；状态不变 | | ☐ ☐ ☐ |
 | A6 | 断开 Tello Wi-Fi | `telemetry_fresh=False`；在 timeout_land/kill 内触发保护 | | ☐ ☐ ☐ |
 | A7 | 机械臂 `capabilities()` | 如实（无位置反馈/无电流/无堵转） | | ☐ ☐ ☐ |
@@ -36,6 +36,7 @@
 | A9 | ACK 开启（`wait_ack=True`） | 收到固件 ACK 才 True；不回则超时 False | | ☐ ☐ ☐ |
 | A10 | 终态闩锁 | `mark_fault()` 后 `request_state("TAKEOFF")` 被拒；模拟 KILL 升级后仍不回 IDLE；`clear_fault()` 飞行中拒绝 | | ☐ ☐ ☐ |
 | A11 | 任务期失效 | NAVIGATE/INSPECT/RETURN 中断定位 / 视频无帧 → 当场停速度 + `MISSION_FAILED`（原因可读） | | ☐ ☐ ☐ |
+| A12 | 终态复位证据 | `clear_fault()` 需**正面落地证据**（高度可信且 ≤30cm 且不再飞行）；高度不可知时默认拒绝，仅 `operator_confirmed=True` 放行 | | ☐ ☐ ☐ |
 
 **A 类总结**：电机是否全程未转？ ☐是 ☐否（若"否"，说明混入了 B 类项目，记录在异常栏）
 
