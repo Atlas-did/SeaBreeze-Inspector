@@ -184,3 +184,11 @@ def test_uplink_latency_delays_the_vehicle_response():
     assert with_delay < no_delay, \
         "有上行延迟时早期位移应更小: 无延迟={:.3f}m, 有延迟={:.3f}m".format(no_delay, with_delay)
     assert no_delay > 0.01, "无延迟时必须真的动了(否则该对比无意义): {:.3f}m".format(no_delay)
+
+
+import pytest  # noqa: E402  (审计 D16: pytestmark 需要它)
+
+
+# 审计 D16: 逐帧驱动 runtime/mission 的用例不得让**墙钟**参与判定
+# (慢 runner 上心跳间隔可能真的超过 timeout_land=1.0s -> 安全层跳闸 -> 断言失真)
+pytestmark = pytest.mark.no_wall_clock

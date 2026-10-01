@@ -14,6 +14,7 @@ import math
 import sys
 import time
 from pathlib import Path
+import pytest   # 审计 D16: 逐用例标记需要
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -212,6 +213,7 @@ def _velocity_trace(rt, n=120):
     return out
 
 
+@pytest.mark.no_wall_clock   # D16: 与墙钟无关的数值对照
 def test_default_path_matches_pre_change_golden():
     """不传新参数 == 改动前版本 (快照取自未改动的 loop.py)。"""
     trace = _trace(_make_runtime(), 200)
@@ -222,6 +224,7 @@ def test_default_path_matches_pre_change_golden():
         assert np.allclose(vel, gvel, rtol=0, atol=1e-5), (i, vel, gvel)
 
 
+@pytest.mark.no_wall_clock   # D16: 与墙钟无关的数值对照
 def test_explicit_zero_params_are_bitwise_identical_to_default():
     """显式传 0 == 不传: 逐帧位置/速度/状态完全相等 (列表 == 逐位比较)。"""
     a = _make_runtime()
@@ -234,6 +237,7 @@ def test_explicit_zero_params_are_bitwise_identical_to_default():
     assert a._actuator is None
 
 
+@pytest.mark.no_wall_clock   # D16: 与墙钟无关的数值对照
 def test_velocity_mode_zero_tau_is_identical_to_no_param():
     """速度指令模式 + tau=0 == 不传该参数 (逐帧逐位)。"""
     a = _velocity_trace(_make_runtime(velocity_command_mode=True))

@@ -614,3 +614,8 @@ def test_operator_confirmed_reset_uses_adapter_reset_hook():
     assert "reset_from_emergency" in drone.calls, "未触发适配器的 reset 边"
     assert drone.state == "IDLE"
     assert mc.state == "IDLE"
+
+
+# 审计 D16: 逐帧驱动 runtime/mission 的用例不得让**墙钟**参与判定
+# (慢 runner 上心跳间隔可能真的超过 timeout_land=1.0s -> 安全层跳闸 -> 断言失真)
+pytestmark = pytest.mark.no_wall_clock

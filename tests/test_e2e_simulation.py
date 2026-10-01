@@ -173,3 +173,11 @@ if __name__ == "__main__":
     test_logger_records_data()
     test_graceful_shutdown()
     print("\n[OK] 所有端到端测试通过!")
+
+
+import pytest  # noqa: E402  (审计 D16: pytestmark 需要它)
+
+
+# 审计 D16: 逐帧驱动 runtime/mission 的用例不得让**墙钟**参与判定
+# (慢 runner 上心跳间隔可能真的超过 timeout_land=1.0s -> 安全层跳闸 -> 断言失真)
+pytestmark = pytest.mark.no_wall_clock
