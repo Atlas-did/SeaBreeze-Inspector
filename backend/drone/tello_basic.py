@@ -272,6 +272,19 @@ class TelloController:
             self._transition("fail")
             return False
 
+    def reset_from_emergency(self) -> bool:
+        """离开 EMERGENCY 回到 IDLE（操作员确认落地后的人工复位）。
+
+        `EMERGENCY → IDLE` 的 "reset" 边早就存在（见 TRANSITIONS），但此前**没有任何调用方**，
+        于是 `land()` 失败进入 EMERGENCY 后适配器永远回不到 IDLE/CONNECTED，
+        使主控的「正面确认已落地」判据在真机上不可达（第五轮审计衍生缺口①）。
+        本方法只做**状态复位**，不发送任何指令；是否允许复位由主控决定。
+        """
+        if self.state != FlightState.EMERGENCY:
+            return False
+        self._transition("reset")
+        return self.state == FlightState.IDLE
+
     def land(self) -> bool:
         """降落"""
         if self.state in (FlightState.HOVERING, FlightState.MOVING):

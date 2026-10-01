@@ -11,6 +11,7 @@
 import time
 
 import numpy as np
+from typing import Optional     # 注解在 Python 3.11/3.12 上是**定义时求值**的(3.14 起才延迟)
 
 from backend.core.disturbance_observer import DisturbanceObserverEKF
 from backend.core.feedforward_controller import FeedforwardController
@@ -351,19 +352,21 @@ class MissionController:
             self._pending_control = np.zeros(3)
             height = self._safe_height_cm()
             low = (height is not None and height <= self.FAULT_LAND_HEIGHT_CM)
-            if low:
-                if not getattr(self.drone, "is_flying", False):
-                    pass                                  # 落地已确认(低空 + 不再飞行) -> 停手
-                elif not getattr(self, "_fault_land_requested", False):
-                    self._request_fault_landing(height)    # 低空但仍在飞 -> 收尾降落
-            else:
-                # 高度未知 或 仍偏高: fail-closed 当作**仍在空中**, 继续推进下降
+            if not low:
+                # 高度未知或仍偏高: fail-closed 当作**仍在空中**, 继续推进下降
                 self._fault_descend_step()
-                # land() 曾失败过时不永久放弃: 每 N 帧重试一次收尾
-                self._fault_land_retry = getattr(self, "_fault_land_retry", 0) + 1
-                if (getattr(self, "_fault_land_failures", 0) > 0
-                        and self._fault_land_retry % self.FAULT_LAND_RETRY_FRAMES == 0):
-                    self._request_fault_landing(height)
+                self._maybe_retry_fault_landing(height)
+                return detections, self._pending_control
+            if self._grounded_confirmed():
+                return detections, self._pending_control          # 正面确认已落地 -> 停手
+            if self._adapter_accepts_land():
+                if not getattr(self, "_fault_land_requested", False):
+                    self._request_fault_landing(height)           # 低空 + 可降落 -> 收尾
+                return detections, self._pending_control          # 已下发: 等触地, 不叠加下降
+            # 低空但适配器**不接受** land()(真机 EMERGENCY/LANDING 等): 只能继续 RC 下降。
+            # (第五轮审计 D17: 此处若"重试 land()"是空转 —— 它只会 return False 不下发命令)
+            self._note_land_unavailable()
+            self._fault_descend_step()
             return detections, self._pending_control
 
         # ---------- IDLE: 等待指令 ----------
@@ -852,6 +855,16 @@ class MissionController:
     FAULT_LAND_HEIGHT_CM = 30.0
     #: land() 失败后, 每隔多少帧重试一次收尾(而不是永久放弃)
     FAULT_LAND_RETRY_FRAMES = 25
+    #: 适配器处于这些状态**且** is_flying=False 时, 才可**正面确认已落地**
+    #: (真机 FlightState: IDLE/CONNECTED 是干净的落地态; EMERGENCY/LANDING 不是)
+    GROUNDED_ADAPTER_STATES = ("IDLE", "CONNECTED")
+    #: 适配器处于这些状态时 land() 才会真的下发底层命令(见 tello_basic.land 的前置条件)
+    LANDABLE_ADAPTER_STATES = ("HOVERING", "MOVING")
+    #: 触地带(cm): 高度可信且连续 N 帧 <= 此值 ⇒ 视为已触地。
+    #: 依据: 低于该高度继续下压对降落没有帮助(反而可能翻倒/打桨), 而真机一旦 land() 失败
+    #: 转入 EMERGENCY 就再也回不到干净落地态 —— 没有这条, 终态会一直往地面压。
+    FAULT_TOUCHDOWN_CM = 5.0
+    FAULT_TOUCHDOWN_CONFIRM_FRAMES = 3
 
     def height_is_known(self) -> bool:
         """当前高度是否可信。
@@ -910,7 +923,7 @@ class MissionController:
             self._note_fault_descent_failure("适配器无 emergency_descent")
             return False
         try:
-            ok = descent(timeout_s=0.1, poll_s=0.0, release_velocity=False)
+            ok = descent(timeout_s=0.05, poll_s=0.01, release_velocity=False)
         except TypeError:
             try:
                 ok = descent()
@@ -926,13 +939,100 @@ class MissionController:
         self._fault_descent_started = True
         return True
 
+    @staticmethod
+    def _adapter_state_name(drone) -> Optional[str]:
+        """取适配器状态机的状态名(没有状态机的适配器返回 None)。"""
+        state = getattr(drone, "state", None)
+        if state is None:
+            return None
+        return (getattr(state, "name", None) or str(state)).upper()
+
+    def _adapter_accepts_land(self) -> bool:
+        """适配器当前是否会**真的执行**降落指令。
+
+        真机 `TelloController.land()` 仅在 HOVERING/MOVING 下才下发底层命令, 其它状态
+        (含 EMERGENCY)直接 `return False` 且**不下发任何命令**(tello_basic.py:277/290)。
+        没有状态机的适配器(仿真/mock)交给它自己判定。
+        """
+        name = self._adapter_state_name(self.drone)
+        if name is None:
+            return True
+        return name in self.LANDABLE_ADAPTER_STATES
+
+    def _grounded_confirmed(self, update_touchdown: bool = True) -> bool:
+        """是否**正面确认已落地**(第五轮审计 D17 + 衍生缺口②)。
+
+        判据(任一成立):
+          A. 高度可信且 <=30cm, 不再飞行, **且**适配器处于干净的落地态(IDLE/CONNECTED);
+          B. **触地带**: 高度可信且连续 `FAULT_TOUCHDOWN_CONFIRM_FRAMES` 帧 <= 5cm
+             —— 此时继续下压没有帮助, 而真机 EMERGENCY 后回不到干净态(否则终态会一直往地面压)。
+        EMERGENCY / LANDING / DISCONNECTED 下的 25cm 读数**不算**落地(fail-closed)。
+        """
+        height = self._safe_height_cm()
+        if update_touchdown:
+            if height is not None and height <= self.FAULT_TOUCHDOWN_CM:
+                self._fault_touchdown_frames = getattr(self, "_fault_touchdown_frames", 0) + 1
+            else:
+                self._fault_touchdown_frames = 0
+        if (height is not None and height <= self.FAULT_TOUCHDOWN_CM
+                and getattr(self, "_fault_touchdown_frames", 0)
+                >= self.FAULT_TOUCHDOWN_CONFIRM_FRAMES):
+            return True                                     # 触地带(连续 N 帧确认)
+        if height is None or height > self.FAULT_LAND_HEIGHT_CM:
+            return False
+        if bool(getattr(self.drone, "is_flying", False)):
+            return False
+        name = self._adapter_state_name(self.drone)
+        if name is None:
+            return True                      # 无状态机: is_flying 即权威
+        return name in self.GROUNDED_ADAPTER_STATES
+
+    def _grounding_refusal_reason(self) -> str:
+        """为什么不能确认落地(用于拒绝复位时给出可读理由)。"""
+        height = self._safe_height_cm()
+        if height is None:
+            return "高度不可信(遥测缺失或陈旧)"
+        if height > self.FAULT_LAND_HEIGHT_CM:
+            return "高度 {:.0f}cm 仍高于 {:.0f}cm".format(height, self.FAULT_LAND_HEIGHT_CM)
+        if bool(getattr(self.drone, "is_flying", False)):
+            return "适配器仍报告在飞行"
+        return "适配器状态 {} 不能证明触地(如 EMERGENCY/LANDING)".format(
+            self._adapter_state_name(self.drone))
+
+    def _note_land_unavailable(self) -> None:
+        """限频告警: 适配器处于不接受 land() 的状态, 软件已无降落手段。"""
+        self._fault_land_unavailable = getattr(self, "_fault_land_unavailable", 0) + 1
+        if self._fault_land_unavailable == 1 or self._fault_land_unavailable % 50 == 0:
+            print("[FAULT] 适配器状态 {} 不接受 land()(不会下发任何命令) —— "
+                  "只能继续 RC 下降; 需要飞控级 failsafe 或外部急停".format(
+                      self._adapter_state_name(self.drone)))
+
+    def _maybe_retry_fault_landing(self, height) -> None:
+        """`land()` 曾失败时按帧数限频重试。
+
+        第五轮审计 D17: 仅在适配器**真的会执行** land() 时才重试 —— 真机 EMERGENCY 下
+        调用只会 `return False` 且不下发命令, 重试是空转。
+        """
+        self._fault_land_retry = getattr(self, "_fault_land_retry", 0) + 1
+        if (getattr(self, "_fault_land_failures", 0) > 0
+                and self._adapter_accepts_land()
+                and self._fault_land_retry % self.FAULT_LAND_RETRY_FRAMES == 0):
+            self._request_fault_landing(height)
+
     def _request_fault_landing(self, height) -> bool:
         """终态收尾: 请求降落。返回**是否成功下发**(不代表已触地)。
 
         第四轮审计 D1: 原实现不看 `land()` 返回值就置 `_fault_land_requested = True`。
         真机 `land()` 失败时**返回 False 并转入 EMERGENCY**(tello_basic.py:287-289),
         于是"降落失败"被记成"已收尾", 之后永远不再尝试。
+
+        第五轮审计 D17: 真机在 EMERGENCY 下 land() **只 return False 且不下发任何命令**
+        (tello_basic.py:277/290), 所以"重试 land()"是空转 —— 这里先判适配器是否接受
+        land(), 不接受就直接报"无降落能力", 由调用方改走 RC 下降(emergency_descent)。
         """
+        if not self._adapter_accepts_land():
+            self._note_land_unavailable()
+            return False
         land = getattr(self.drone, "land", None)
         if not callable(land):
             self._fault_land_failures = getattr(self, "_fault_land_failures", 0) + 1
@@ -1177,6 +1277,11 @@ class MissionController:
         self._fault_reason = reason
         self._fault_descent_started = False
         self._fault_land_requested = False
+        # 衍生缺口④: 二次 mark_fault 不得继承上一次的失败计数/触地计数
+        self._fault_land_failures = 0
+        self._fault_land_retry = 0
+        self._fault_touchdown_frames = 0
+        self._fault_land_unavailable = 0
 
         flying = bool(getattr(self.drone, "is_flying", False))
         if flying:
@@ -1203,21 +1308,28 @@ class MissionController:
             print("[WARN] 当前状态 {} 不是终态(且未闩锁), 无需复位".format(self.state))
             return False
         height = self._safe_height_cm()
-        grounded = (height is not None
-                    and height <= self.FAULT_LAND_HEIGHT_CM
-                    and not bool(getattr(self.drone, "is_flying", False)))
-        if not grounded and not operator_confirmed:
-            print("[ERROR] 拒绝复位终态: 无法确认已落地(高度={}) —— 需要操作员确认 "
-                  "clear_fault(operator_confirmed=True)".format(
-                      "未知" if height is None else "{:.0f}cm".format(height)))
+        if not self._grounded_confirmed() and not operator_confirmed:
+            print("[ERROR] 拒绝复位终态: {} —— 需要操作员确认 "
+                  "clear_fault(operator_confirmed=True)".format(self._grounding_refusal_reason()))
             return False
         prev = self.state
+        if operator_confirmed:
+            # 衍生缺口①: 真机 land() 失败会停在 EMERGENCY, 而 EMERGENCY→IDLE 的 "reset" 边
+            # 此前无人触发 ⇒ 适配器永远回不到干净落地态。操作员确认落地后这里顺手复位它。
+            reset = getattr(self.drone, "reset_from_emergency", None)
+            if callable(reset):
+                try:
+                    if reset():
+                        print("[SAFETY] 适配器已离开 EMERGENCY 回到 IDLE(操作员确认)")
+                except Exception as e:
+                    print("[WARN] 适配器复位失败: {}".format(e))
         self._fault_reason = None
         self._mission_failed_reason = None
         self._fault_descent_started = False
         self._fault_land_requested = False
         self._fault_land_failures = 0
         self._fault_land_retry = 0
+        self._fault_touchdown_frames = 0
         self._fault_descent_failures = 0
         self._terminal_latched = False          # 先解锁, 再走统一入口
         self._set_state("IDLE", reason, force=True, allow_terminal_exit=True)

@@ -48,13 +48,17 @@ class FakeDrone:
     """
 
     def __init__(self, flying=True, height_known=True, telemetry_fresh=True,
-                 height=100.0, land_ok=True, descent_ok=True):
+                 height=100.0, land_ok=True, descent_ok=True, state=None):
         self.is_flying = flying
         self._height_known = height_known
         self._telemetry_fresh = telemetry_fresh
         self._height = float(height)
         self._land_ok = land_ok
         self._descent_ok = descent_ok
+        # 真机 TelloController 有状态机(FlightState), is_flying 是它的派生属性 ——
+        # 第五轮审计 D17: 替身必须复刻这一点(EMERGENCY 下 is_flying 同样是 False),
+        # 否则又会把「异常态导致的 False」误当成「已落地」。
+        self.state = state
         self.calls = []
         self.descent_args = []
 
@@ -75,12 +79,24 @@ class FakeDrone:
     def land(self):
         self.calls.append("land")
         if not self._land_ok:
-            self.is_flying = False        # 真机 land 失败 -> 进 EMERGENCY -> is_flying False
-            self._height_known = False    # 且此后高度不再可信
+            # 真机: land() 抛异常 -> _emergency() -> EMERGENCY, 而 is_flying(property) 变 False;
+            # **遥测仍在送包**, 所以高度依然可信(第五轮审计 D17: 旧替身把它改成「不可信」,
+            # 于是代码走了下降分支, 掩盖了「EMERGENCY + 新鲜低空」这条真实路径)。
+            self.is_flying = False
+            self.state = "EMERGENCY"
             return False
         self.is_flying = False
+        self.state = "CONNECTED"          # 干净落地态
         self._height = 0.0
         return True
+
+    def reset_from_emergency(self):
+        """复刻真机 tello_basic.reset_from_emergency: 仅 EMERGENCY -> IDLE 的纯状态复位。"""
+        self.calls.append("reset_from_emergency")
+        if self.state == "EMERGENCY":
+            self.state = "IDLE"
+            return True
+        return False
 
     def motor_cutoff(self, reason=""):
         self.calls.append("motor_cutoff")
@@ -479,22 +495,25 @@ def test_simulation_height_is_trusted():
 # =============================================================================
 
 def test_fault_land_failure_is_not_recorded_as_success():
-    """D1: land() 返回 False 时不得置 `_fault_land_requested`, 且之后必须仍会重试。"""
+    """D1+D17: land() 失败(真机 -> EMERGENCY)不得记为成功, 也不得空转重试 land()。"""
     mc = _mc(mock=False)
-    drone = FakeDrone(flying=True, height=10.0, land_ok=False)
+    drone = FakeDrone(flying=True, height=10.0, land_ok=False, state="HOVERING")
     mc.drone = drone
     mc.mark_fault("空中故障")
 
     drone.calls.clear()
-    mc._handle_state_machine(np.zeros(3))              # 低空 -> 尝试 land()
-    assert "land" in drone.calls, "低空确认后未尝试收尾降落"
+    mc._handle_state_machine(np.zeros(3))
+    assert "land" in drone.calls, "低空 + 可降落状态时未尝试收尾降落"
     assert mc._fault_land_requested is False, "降落失败被记成了成功"
     assert mc._fault_land_failures >= 1, "降落失败未被计数"
 
-    before = drone.calls.count("land")                 # 失败后不得永久放弃
+    # 失败后适配器处于 EMERGENCY: 该状态下 land() 不会下发任何命令(真机 tello_basic.py:290)
+    # -> 必须改为继续 RC 下降, 而不是反复调用一个空转的 land()。
+    drone.calls.clear()
     for _ in range(mc.FAULT_LAND_RETRY_FRAMES + 2):
         mc._handle_state_machine(np.zeros(3))
-    assert drone.calls.count("land") > before, "land() 失败后再未重试"
+    assert drone.calls.count("land") == 0, "在 EMERGENCY 下空转重试 land()"
+    assert drone.calls.count("emergency_descent") > 0, "EMERGENCY 下停止了安全下降动作"
 
 
 def test_fault_treats_unknown_height_as_airborne_even_when_not_flying():
@@ -535,4 +554,63 @@ def test_clear_fault_requires_operator_confirmation_when_height_unknown():
     assert mc.clear_fault("无依据复位") is False
     assert mc.state == "FAULT"
     assert mc.clear_fault("操作员确认", operator_confirmed=True) is True
+    assert mc.state == "IDLE"
+
+
+def test_emergency_state_with_fresh_low_height_is_not_treated_as_landed():
+    """D17(第五轮审计): EMERGENCY + 遥测新鲜 + 高度 25cm 时, 必须继续下降而不是停手。"""
+    mc = _mc(mock=False)
+    drone = FakeDrone(flying=False, height_known=True, height=25.0, state="EMERGENCY")
+    mc.drone = drone
+    mc.state = "FAULT"
+    mc._terminal_latched = True
+
+    drone.calls.clear()
+    mc._handle_state_machine(np.zeros(3))
+    assert drone.calls.count("emergency_descent") > 0, "被 is_flying=False 骗过而停手"
+    assert drone.calls.count("land") == 0, "EMERGENCY 下调用 land() 只会空转"
+
+
+def test_emergency_state_refuses_reset_without_operator_confirmation():
+    """D17: EMERGENCY 下即使高度读数 <30cm, 也不能据此复位。"""
+    mc = _mc(mock=False)
+    mc.drone = FakeDrone(flying=False, height_known=True, height=25.0, state="EMERGENCY")
+    mc.mark_fault("故障")
+
+    assert mc.clear_fault("无依据复位") is False
+    assert mc.state == "FAULT"
+    assert mc.clear_fault("操作员确认", operator_confirmed=True) is True
+    assert mc.state == "IDLE"
+
+
+def test_touchdown_band_stops_actuation_in_emergency():
+    """衍生缺口②: EMERGENCY 下高度已到触地带(<=5cm 连续 3 帧)后必须停止继续下压。"""
+    mc = _mc(mock=False)
+    drone = FakeDrone(flying=False, height_known=True, height=3.0, state="EMERGENCY")
+    mc.drone = drone
+    mc.mark_fault("降落失败")
+    drone.calls.clear()
+
+    for _ in range(3):                       # 连续 3 帧触地确认
+        mc._handle_state_machine(np.zeros(3))
+    assert "emergency_descent" in drone.calls, "触地确认前应仍在推进下降"
+    before = drone.calls.count("emergency_descent")
+    for _ in range(4):                       # 确认后不得再下压
+        mc._handle_state_machine(np.zeros(3))
+    assert drone.calls.count("emergency_descent") == before,         "已进入触地带却仍在持续下压"
+    assert mc.clear_fault("落地后复位") is True   # 触地带 + 连续确认 => 可复位
+    assert mc.state == "IDLE"
+
+
+def test_operator_confirmed_reset_uses_adapter_reset_hook():
+    """衍生缺口①: 操作员确认后应把适配器从 EMERGENCY 拉回干净态(reset 边可达)。"""
+    mc = _mc(mock=False)
+    drone = FakeDrone(flying=False, height_known=True, height=25.0, state="EMERGENCY")
+    mc.drone = drone
+    mc.mark_fault("降落失败")
+    drone.calls.clear()
+
+    assert mc.clear_fault("操作员确认", operator_confirmed=True) is True
+    assert "reset_from_emergency" in drone.calls, "未触发适配器的 reset 边"
+    assert drone.state == "IDLE"
     assert mc.state == "IDLE"
