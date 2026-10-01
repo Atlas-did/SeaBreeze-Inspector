@@ -59,3 +59,13 @@ def test_all_green_report_emits_notice(tmp_path):
     proc = _run(tmp_path, xml)
     assert proc.returncode == 0, proc.stderr
     assert "::notice::" in proc.stdout
+
+
+def test_malformed_report_is_a_warning_not_a_crash(tmp_path):
+    """测试步骤被超时/取消时 pytest 可能留下**残缺 XML** —— 注解步骤不得二次失败。
+
+    （run #6 的 windows 腿就是这种情况: 注解步骤本身 failed, 把真正原因盖住了。）
+    """
+    proc = _run(tmp_path, "<testsuites><testsuite><testcase name='x'")
+    assert proc.returncode == 0, proc.stderr
+    assert "::warning::" in proc.stdout

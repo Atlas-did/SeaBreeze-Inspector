@@ -45,7 +45,13 @@ def main(argv):
     if not path.exists():
         print("::warning::找不到 JUnit 报告 {}（测试可能未跑到写报告就中断）".format(path))
         return 0
-    rows = collect_failures(path)
+    try:
+        rows = collect_failures(path)
+    except ET.ParseError as exc:
+        # 测试步骤被超时/取消时, pytest 可能只留下**残缺 XML** —— 这属于"报告不可用",
+        # 不该让注解步骤本身再失败一次(否则真正原因会被二次错误覆盖)。见 run #6 windows 腿。
+        print("::warning::JUnit 报告无法解析（{}）：{}".format(exc, path))
+        return 0
     if not rows:
         print("::notice::JUnit 报告里没有失败用例")
         return 0

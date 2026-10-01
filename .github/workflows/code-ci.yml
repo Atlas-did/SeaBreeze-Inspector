@@ -75,8 +75,10 @@ jobs:
           PYTHONIOENCODING: utf-8
           PYTHONUTF8: 1
         # 审计 D10: 之前用 `-v --tb=short` 整轮跑 15–25 分钟, 失败后日志里要翻很久才找到用例。
-        # 现在: -x 首个失败即停(快速反馈) + --durations=15 打出最慢用例 + --timeout=120 卡死即报。
-        run: xvfb-run -a python -m pytest tests/ -q -x --tb=short --durations=15 --timeout=120 --junitxml=pytest-report.xml
+        # 现在: -x 首个失败即停(快速反馈) + --durations=15 打出最慢用例 + --timeout 卡死即报。
+        # --timeout=600 而非 120: 高度保持基准在 CI 的**软件渲染**下比本机慢约 50 倍
+        # (run #2 无超时参数时它是 PASSED 的), 120s 会把"慢"误判成"卡死"(实测 run #6 两条腿)。
+        run: xvfb-run -a python -m pytest tests/ -q -x --tb=short --durations=15 --timeout=600 --junitxml=pytest-report.xml
 
       - name: Annotate pytest failures (public, no login needed)
         if: failure() && runner.os == 'Linux'
@@ -89,7 +91,7 @@ jobs:
           SDL_VIDEODRIVER: dummy
           PYTHONIOENCODING: utf-8
           PYTHONUTF8: 1
-        run: python -m pytest tests/ -q -x --tb=short --durations=15 --timeout=120 --junitxml=pytest-report.xml
+        run: python -m pytest tests/ -q -x --tb=short --durations=15 --timeout=600 --junitxml=pytest-report.xml
 
       - name: Annotate pytest failures (public, no login needed)
         if: failure() && runner.os == 'Windows'
