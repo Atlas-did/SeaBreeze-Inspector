@@ -79,6 +79,14 @@ REVIEW_VERDICT.md
 research/README.md
 research/EVIDENCE_MAP.md
 research/专项/GAP_TRACKER.md
+# 内部工作文档：修复计划/清单，不含可被第三方验证的结论
+research/v5_2_数据协议修复方案.md
+research/真机修复清单_backend对齐版.md
+# 已被 v5.2 取代的训练分析（数字已过时，保留在磁盘但不入库）
+research/v5_1_balanced_yolo11s_训练结果分析.md
+# 评审联络表图片（1.9 MB）：真正的证据是 review_manifest.csv，
+# 已入库；图片本身只是给人看的辅助材料
+research/v5_2/review_sheet_scene04.png
 
 data/raw/
 runs/detect/
