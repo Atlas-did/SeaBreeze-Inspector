@@ -12,7 +12,7 @@
 This project proposes an intelligent inspection solution combining a UAV with a 3-DOF lightweight robotic arm. Using a DJI Tello drone, it achieves autonomous flight, stable hovering, and defect identification on wind turbine towers through:
 
 - **Disturbance Observer (12-state EKF)** — estimates wind disturbances; innovation is χ²₆-consistent (D² test)
-- **Feedforward PID Controller** — disturbance-aware position control (feedforward into the physics loop is **opt-in**: `cascade_feedforward=True`; measured −80.6% wind-hover error — see the drive-mode note below)
+- **Feedforward PID Controller** — disturbance-aware position control. **The default demo path runs plain PID (no feedforward);** pass `cascade_feedforward=True` to get the PID+FF controller described in the paper (measured −80.6% wind-hover error). See the "default path has no feedforward" note below.
 - **RRT\* Path Planning** — 3D obstacle-aware trajectory generation (wired into the demo mission key `M`)
 - **Defect Detection (YOLO11s training line)** — real-time crack/corrosion/damage detection
 
@@ -47,6 +47,18 @@ This project proposes an intelligent inspection solution combining a UAV with a 
 > cascade 悬停 XY 误差 **0.0952 m** / Z 误差 0.0040 m / 峰值速度 0.840 m/s；
 > velocity 悬停 XY 误差 **0.0123 m** / Z 误差 0.0146 m / 峰值速度 1.000 m/s。
 > 若要让演示路径等于真机链路，须显式打开该开关，**并接受已发表数值随之改变**。
+
+> **⚠️ 默认演示路径不含前馈（必读）**：论文/README 宣称的是 **PID + Feedforward** 控制器，
+> 但**默认配置下前馈对物理不起作用**：
+> - 默认 `cascade_feedforward=False` ⇒ 级联环**不消费**扰动估计 `d̂`，物理上跑的是
+>   **纯 PID**；`mc` 控制器算出的前馈项在仿真路径中被丢弃（历史行为，见 P0-1）。
+> - 只有显式传 `cascade_feedforward=True` 时，级联环才会减去 `d̂`，此时才是**PID + FF**
+>   —— 也才是论文所述系统。实测抗风悬停误差 0.0896 → 0.0174 m（**−80.6%**）。
+> - 之所以默认关闭：仓库有一条硬要求"默认路径逐位不变"，**已发表的高度/悬停数字全部来自
+>   无前馈的默认路径**（`tests/test_transport_model.py::test_default_path_matches_pre_change_golden`）。
+>
+> **引用口径**：凡引用"PID+前馈补偿"的结论，必须同时标注它是 `cascade_feedforward=True`
+> 得到的；凡引用已发表的高度/悬停数字，必须标注它来自默认（**无前馈**）路径。两者不可互换。
 
 ## Quick Start
 

@@ -85,3 +85,16 @@ runs/detect/
 seabreeze-3d-sim/train_v3.py
 scripts/watch_training.py
 *.zip
+
+# ---------------------------------------------------------------------------
+# Derived datasets (2026-10-06 复核建议)
+# images/ 实测 696 MB / 3780 文件 —— 一旦入库就永久留在 git 历史里，事后
+# `git rm --cached` 也删不掉。故按目录忽略图像与标签子树，但**保留**数据集
+# 根目录下的小体积 provenance 产物（manifests / split_summary /
+# adjudication_decisions / ood_test_EVAL_LOCK_final.json）—— 第三方要靠它们
+# 才能验证"OOD 只测了一次"这类声明。
+# ---------------------------------------------------------------------------
+datasets/**/images/
+datasets/**/labels/
+datasets/**/ood_test/
+
