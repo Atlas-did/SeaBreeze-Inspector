@@ -122,6 +122,8 @@ class MissionController:
         self.target_pos = np.array([0.0, 0.0, float(default_hover)])
         self.current_pos = np.zeros(3)
         self.current_vel = np.zeros(3)
+        # P1-9: mock 模式 IMU 用速度差分估加速度，需保存上一帧速度
+        self._prev_vel_for_imu = np.zeros(3)
         self.current_attitude = np.zeros(3)
         self._battery = 100
 
@@ -561,10 +563,15 @@ class MissionController:
         if self.mock:
             # 模拟传感器: 位置渐近于真实位置 + 噪声
             # IMU观测 = 真实加速度 + 扰动 + 噪声
-            # 简化: 使用速度差分近似加速度
-            imu_x = (self.current_vel[0] + np.random.normal(0, 5)) if self.current_vel[0] != 0 else np.random.normal(0, 5)
-            imu_y = (self.current_vel[1] + np.random.normal(0, 5)) if self.current_vel[1] != 0 else np.random.normal(0, 5)
-            imu_z = np.random.normal(0, 5)
+            # P1-9 修复 (2026-10-06 评审): 原实现把 current_vel(速度, cm/s) 直接当
+            # 加速度(cm/s²) 注入 IMU —— 注释本就写着"用速度差分近似加速度"，
+            # 实现却没做差分。现改为真正的速度差分，量纲为 cm/s²。
+            dt_imu = max(float(self.dt), 1e-6)
+            accel = (self.current_vel - self._prev_vel_for_imu) / dt_imu
+            self._prev_vel_for_imu = self.current_vel.copy()
+            imu_x = accel[0] + np.random.normal(0, 5)
+            imu_y = accel[1] + np.random.normal(0, 5)
+            imu_z = accel[2] + np.random.normal(0, 5)
 
             # P1-2: 本帧确实取到了传感器数据 -> 允许刷新安全心跳
             self._sensor_fresh = True
