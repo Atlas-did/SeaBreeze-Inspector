@@ -11,10 +11,10 @@
 
 This project proposes an intelligent inspection solution combining a UAV with a 3-DOF lightweight robotic arm. Using a DJI Tello drone, it achieves autonomous flight, stable hovering, and defect identification on wind turbine towers through:
 
-- **Disturbance Observer (12-state EKF)** 鈥?estimates and compensates for wind disturbances
-- **Feedforward PID Controller** 鈥?disturbance-aware position control
-- **RRT\* Path Planning** 鈥?3D obstacle-aware trajectory generation
-- **Defect Detection (YOLO11s training line)** 鈥?real-time crack/corrosion/damage detection
+- **Disturbance Observer (12-state EKF)** — estimates and compensates for wind disturbances
+- **Feedforward PID Controller** — disturbance-aware position control
+- **RRT\* Path Planning** — 3D obstacle-aware trajectory generation
+- **Defect Detection (YOLO11s training line)** — real-time crack/corrosion/damage detection
 
 ## Tech Stack
 
@@ -28,12 +28,25 @@ This project proposes an intelligent inspection solution combining a UAV with a 
 | Frontend | Web 3D (main demo) + Tkinter dashboard (legacy, monitor-only) |
 | Language | Python 3.10+ |
 
-> **妯″瀷鐘舵€侊紙璇氬疄鏍囨敞锛屽嬁鎹瀹ｇО鍙鐜帮級**锛氳缁冪嚎鏄?**YOLO11s**
-> 锛坄backend/vision/train.py` 鐨?`DEFAULT_MODEL`锛夛紱鑰?`config/yolo_config.yaml`
-> 褰撳墠鎸囧悜鐨勬槸**鍘嗗彶鏉冮噸** `seabreeze_v3.pt`锛屽叾璁粌/璇勪及 provenance 灏氭湭鐧昏
-> 锛坄data/model_manifest.json` 鐨?`training` / `eval` 浠嶄负 null锛夈€?
-> 璇ラ厤缃凡鐢?`scripts/check_deployment_config.py` 鎶婂叧锛堟潈閲嶅繀椤诲瓨鍦ㄤ笖 SHA256 瀵瑰緱涓婏級锛?
-> 浣嗗湪 provenance 琛ラ綈鍓嶏紝**瀹冧笉鏄竴涓彲澶嶇幇鐨勫彂甯冨€欓€?*銆?
+> **模型状态（诚实标注，勿据此宣称可复现）**：训练线是 **YOLO11s**
+> （`backend/vision/train.py` 的 `DEFAULT_MODEL`）；而 `config/yolo_config.yaml`
+> 当前指向的是**历史权重** `seabreeze_v3.pt`，其训练/评估 provenance 尚未登记
+> （`data/model_manifest.json` 的 `training` / `eval` 仍为 null）。
+> 该配置已由 `scripts/check_deployment_config.py` 把关（权重必须存在且 SHA256 对得上），
+> 但在 provenance 补齐前，**它不是一个可复现的发布候选**。
+
+> **物理驱动模式（诚实披露，P1-12）**：`SimRuntime` 有两种驱动方式，**默认不是真机链路**。
+> - `velocity_command_mode=False`（**默认**）：物理由 SimRuntime 自带级联环读 `mc.target_pos` 驱动；
+>   **仓库已发表的高度/悬停数字均来自这一路径**（有 golden 测试锁定，见
+>   `tests/test_transport_model.py::test_default_path_matches_pre_change_golden`）。
+> - `velocity_command_mode=True`：物理由控制器输出 → `drone.set_velocity` → 机体速度环驱动，
+>   即**真机同源链路**。
+>
+> 两种模式数值不可混用。对照实验见 `verify_scripts/compare_command_modes.py`，输出
+> `command_mode_comparison.json`；在同一侧风（0.05/0.04 m/s + 阵风 0.02）与同种子下实测：
+> cascade 悬停 XY 误差 **0.0952 m** / Z 误差 0.0040 m / 峰值速度 0.840 m/s；
+> velocity 悬停 XY 误差 **0.0123 m** / Z 误差 0.0146 m / 峰值速度 1.000 m/s。
+> 若要让演示路径等于真机链路，须显式打开该开关，**并接受已发表数值随之改变**。
 
 ## Quick Start
 
@@ -67,7 +80,7 @@ python scripts/flash_firmware.py
 ### 4. Run Tests
 
 ```bash
-# Run all test suites (426 tests in 46 files)
+# Run all test suites (427 tests in 46 files)
 bash scripts/run_tests.sh      # Linux/macOS
 scripts\run_tests.bat          # Windows
 
@@ -96,7 +109,7 @@ offshore-wind-uav-arm/
 |-- firmware/              # Arduino servo controller
 |-- config/                # YAML configuration files
 |-- data/                  # Flight logs + datasets
-|-- tests/                 # Pytest suite (426 tests, 46 files)
+|-- tests/                 # Pytest suite (427 tests, 46 files)
 |-- scripts/               # Setup / flash / verification tools
 |-- docs/                  # Documentation + attic
 +-- seabreeze-3d-sim/      # Web 3D sim (Three.js, main demo)

@@ -63,6 +63,31 @@ def test_feedforward_actually_reduces_wind_error():
         "前馈应把抗风稳态误差降低 >20%，实测 {:.1f}%".format(reduction * 100))
 
 
+def test_both_command_modes_reach_hover():
+    """P1-12: 两种物理驱动模式都必须能完成起飞并进入悬停。
+
+    cascade（默认）与 velocity（真机同源链路）数值不同、不可混用，
+    但两者都必须是"能飞"的。默认值不翻（已发表数字来自默认路径）。
+    """
+    results = {}
+    for mode in (False, True):
+        np.random.seed(11)
+        quad = Quadrotor3D()
+        wind = WindDisturbance(base_wind=np.array([0.05, 0.04, 0.0]),
+                               freq=0.3, gust_amp=0.02)
+        mc = MissionController(mode='simulation', mock=True)
+        rt = SimRuntime(mc, quad, wind, RobotArm3DOF(), VirtualSensor(),
+                        velocity_command_mode=mode)
+        mc.video_stream.stop()
+        mc.video_stream._running = False
+        for i in range(500):
+            rt.step(0.02, {'Space'} if i == 50 else set())
+        results[mode] = (mc.state, float(np.linalg.norm(quad.get_velocity())))
+    for mode, (state, _v) in results.items():
+        assert state == 'HOVERING', (
+            'velocity_command_mode={} 未进入悬停，实际 {}'.format(mode, state))
+
+
 class TestSimRuntime:
     def test_initial_state_is_idle(self):
         rt = _make_runtime()

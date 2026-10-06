@@ -1,0 +1,37 @@
+{
+  "protocol": "P1-12 command-mode comparison (simulation-only)",
+  "note": "两种模式驱动方式不同，数值不可混用；cascade 为默认且已发表数字来自该路径。本对照只用于诚实披露差异，不改变默认值。",
+  "wind": {
+    "base_wind": [
+      0.05,
+      0.04,
+      0.0
+    ],
+    "gust_amp": 0.02
+  },
+  "seed": 11,
+  "cascade_default": {
+    "mode": "cascade",
+    "state": "HOVERING",
+    "final_pos_m": [
+      0.0487,
+      0.0459,
+      1.1974
+    ],
+    "hover_xy_err_mean_m": 0.09523,
+    "hover_z_err_mean_m": 0.00396,
+    "max_speed_mps": 0.8395
+  },
+  "velocity_command": {
+    "mode": "velocity",
+    "state": "HOVERING",
+    "final_pos_m": [
+      -0.0119,
+      -0.0061,
+      1.2028
+    ],
+    "hover_xy_err_mean_m": 0.0123,
+    "hover_z_err_mean_m": 0.01457,
+    "max_speed_mps": 1.0
+  }
+}
