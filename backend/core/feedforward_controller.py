@@ -136,6 +136,8 @@ class FeedforwardController:
         pid_output = P_term + I_term + D_term
 
         # Feedforward: Kff * d_est
+        # 量纲 (P1-10): pid_output 是速度指令 (cm/s)，d_est 是扰动加速度 (cm/s²)，
+        # 故 Kff 的量纲是 [s]（见 from_config 注释）。
         ff_output = np.zeros(3)
         if self.enable_ff and disturbance_est is not None:
             d_est = np.asarray(disturbance_est, dtype=float)
@@ -207,7 +209,12 @@ class FeedforwardController:
             Kp=_get(config, "controller.Kp", 2.0),
             Ki=_get(config, "controller.Ki", 0.1),
             Kd=_get(config, "controller.Kd", 1.0),
-            Kff=-1.0,
+            # P1-10 修复 (2026-10-06 评审): Kff 原先硬编码 -1.0 且不读配置。
+            # 量纲说明: compute() 的输出是**速度指令 (cm/s)**, 而 d_est 是
+            # **加速度 (cm/s²)**, 因此 Kff 必须具有**时间量纲 [s]** 才能闭合
+            # (物理含义: 用"扰动加速度 × 时间常数"估计需要补偿的速度)。
+            # 标称 -1.0 [s] 是经验整定值。
+            Kff=_get(config, "controller.Kff", -1.0),
             dt=1.0 / _get(config, "flight.control_rate_hz", 10),
             max_speed=_get(config, "flight.max_speed", 50),
             d_cutoff_hz=_get(config, "controller.d_cutoff_hz", 0.0),

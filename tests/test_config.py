@@ -12,6 +12,22 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from backend.utils.config import ConfigLoader
 
 
+def test_kff_is_read_from_config_not_hardcoded():
+    """P1-10 回归：controller.Kff 必须从 drone_config.yaml 读取（曾被硬编码 -1.0）。
+
+    Kff 量纲为 [s]（输出速度指令 cm/s ÷ 扰动加速度 cm/s²），标称负值，
+    故 schema 对其显式允许负值（第 4 项 allow_negative=True）。
+    """
+    from backend.core.feedforward_controller import FeedforwardController
+
+    cfg = ConfigLoader.load("drone_config", config_dir=PROJECT_ROOT / "config")
+    yaml_kff = cfg.controller.Kff
+    ctrl = FeedforwardController.from_config(cfg)
+    assert ctrl.Kff == yaml_kff, (
+        "Kff 未从配置读取：config={} ctrl={}".format(yaml_kff, ctrl.Kff))
+    assert ctrl.Kff < 0, "Kff 标称应为负（反向补偿扰动）"
+
+
 def test_load_yaml():
     """测试 YAML 配置加载"""
     print("[TEST] YAML 配置加载")

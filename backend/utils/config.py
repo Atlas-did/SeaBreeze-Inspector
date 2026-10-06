@@ -121,6 +121,13 @@ class ConfigLoader:
             "safety.safe_point.z": ((int, float), False, 100),
             "mission.inspect_timeout_s": ((int, float), False, 30),
             "safety.near_wall_min_distance": ((int, float), True, 100),
+            "controller.Kp": ((int, float), False, 2.0),
+            "controller.Ki": ((int, float), False, 0.1),
+            "controller.Kd": ((int, float), False, 1.0),
+            # P1-10: Kff 量纲 [s]，标称 -1.0（负号 = 反向补偿扰动），故允许负值
+            "controller.Kff": ((int, float), False, -1.0, True),
+            "controller.d_cutoff_hz": ((int, float), False, 0.0),
+            "controller.integral_separation": ((int, float), False, 0.0),
             "imu_noise.accel_noise_std": ((int, float), True, 0.05),
             "imu_noise.optical_flow_noise_std": ((int, float), True, 2.0),
             "imu_noise.barometer_noise_std": ((int, float), True, 10.0),
@@ -341,7 +348,12 @@ class ConfigLoader:
         if not schema:
             return  # 无schema定义, 跳过校验
 
-        for field_path, (expected_type, required, _default) in schema.items():
+        for field_path, spec in schema.items():
+            # schema 条目: (type, required, default[, allow_negative])
+            # 第 4 项 allow_negative 默认为 False —— 保留"配置项非负"这条全局安全网，
+            # 仅对确实需要带符号的字段显式开口（如 controller.Kff 量纲为 [s] 且为负）。
+            expected_type, required = spec[0], spec[1]
+            allow_negative = bool(spec[3]) if len(spec) > 3 else False
             value = cls._get_nested(data, field_path)
 
             # 必填检查
@@ -370,8 +382,9 @@ class ConfigLoader:
                     )
                 )
 
-            # 数值范围检查: 非负数
-            if isinstance(value, (int, float)) and value < 0:
+            # 数值范围检查: 非负数 (allow_negative=True 的字段豁免)
+            if (not allow_negative and isinstance(value, (int, float))
+                    and value < 0):
                 raise ConfigTypeError(
                     "配置校验失败 ({}) — 字段 '{}' 值异常: {} < 0".format(
                         path.name, field_path, value
