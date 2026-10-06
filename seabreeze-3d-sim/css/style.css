@@ -35,6 +35,8 @@ html, body {
 .row { display: flex; align-items: center; gap: 8px; margin: 5px 0; }
 .row .k { width: 62px; color: #7fa8c8; font-size: 11px; }
 .row .v { color: #d0e8ff; }
+/* P1-11: 单位标签 —— POS/VEL/WIND/TARGET 的数值本身不带单位，用暗色小字补上 */
+.row .u { color: #5f86a6; font-size: 10px; }
 .row .v.state { color: #4dd0a0; font-weight: bold; }
 .row .v.ok { color: #4dd0a0; }
 .row .v.warn { color: #ffb347; }

@@ -145,11 +145,15 @@ export class HUD {
     set('t-target', (data.state === 'HOVERING' || data.state === 'NAVIGATE') ? (data.target ? f3(data.target) : '--') : '--');
 
     // EKF
+    // 后端 ekf_mahal 是 D (=√D²)。P1-6: 阈值必须加在 D²(χ²₆) 上，故这里先平方
+    // 再比 12.59 / 16.81（95% / 99% 分位）。显示仍给 D，便于与后端日志对照。
     const mahal = data.ekf_mahal || 0;
+    const d2 = mahal * mahal;
     const ekfEl = $('t-ekf');
     if (ekfEl) {
-      ekfEl.textContent = 'D=' + mahal.toFixed(1);
-      ekfEl.className = 'v ' + (mahal < CFG.EKF_OK ? 'ok' : mahal < CFG.EKF_WARN ? 'warn' : 'err');
+      ekfEl.textContent = 'D=' + mahal.toFixed(1) + ' D²=' + d2.toFixed(1);
+      ekfEl.className = 'v ' + (d2 < CFG.EKF_D2_OK ? 'ok'
+                                : d2 < CFG.EKF_D2_WARN ? 'warn' : 'err');
     }
 
     // Safety tier

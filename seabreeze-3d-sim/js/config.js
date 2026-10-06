@@ -29,8 +29,12 @@ export const CFG = {
   // Safety thresholds
   BATTERY_WARN: 30,
   BATTERY_LOW: 15,
-  EKF_OK: 5,
-  EKF_WARN: 10,
+  // P1-6 修正 (2026-10-06 评审): 新息一致性判据必须加在 D²(χ²₆) 上，不是 D。
+  // 6 维观测下 D² = yᵀS⁻¹y ~ χ²₆，95% 分位 12.59，99% 分位 16.81。
+  // 旧值 EKF_OK=5 / EKF_WARN=10 拿 D 去比 D² 的分位数，判据偏松
+  // （D=5 时 D²=25，早已超过 99% 分位，颜色却只到 warn）。
+  EKF_D2_OK: 12.59,
+  EKF_D2_WARN: 16.81,
 
   // Camera
   CAMERA_FPS: 10,               // camera canvas redraw rate (Hz)
