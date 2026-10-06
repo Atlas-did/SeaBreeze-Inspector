@@ -4,6 +4,11 @@ Tkinter监控面板 — 实时显示无人机状态
 选型: Tkinter (Python内置, 无需安装, 跨平台)
 布局: 左侧状态面板(电池/高度/坐标), 右侧视频窗口(640x480)
 更新: 通过 MessageBus 订阅或 mock 模拟, 100ms刷新
+
+⚠️ 遗留组件 (2026-10-06 评审 P2-13): 本文件已被 Web 3D 前端
+(`seabreeze-3d-sim/`, Three.js 主演示)取代。全仓库没有任何代码 import 它，
+也没有测试覆盖 —— 仅可作为独立脚本 `python frontend/dashboard.py` 手动运行。
+保留是为了不丢失 Tkinter 版监控面板的实现，但**不要**再把它当作主前端。
 """
 
 import tkinter as tk

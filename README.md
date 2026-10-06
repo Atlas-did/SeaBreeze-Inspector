@@ -1,4 +1,4 @@
-﻿# Offshore Wind Turbine UAV-Arm Cooperative Inspection System
+# Offshore Wind Turbine UAV-Arm Cooperative Inspection System
 
 > An open-source UAV + robotic arm cooperative system for offshore wind turbine inspection.
 > Built with DJI Tello, Arduino, and Python.
@@ -25,7 +25,7 @@ This project proposes an intelligent inspection solution combining a UAV with a 
 | MCU | Arduino Nano (CH340) + PCA9685 servo driver |
 | Algorithms | 12D-EKF, PID+Feedforward, RRT\*, YOLO11s (detector) |
 | Simulation | Pygame + Three.js 3D visualization |
-| Frontend | Tkinter dashboard (monitor-only) + Web 3D (main demo) |
+| Frontend | Web 3D (main demo) + Tkinter dashboard (legacy, monitor-only) |
 | Language | Python 3.10+ |
 
 > **妯″瀷鐘舵€侊紙璇氬疄鏍囨敞锛屽嬁鎹瀹ｇО鍙鐜帮級**锛氳缁冪嚎鏄?**YOLO11s**
@@ -92,7 +92,7 @@ offshore-wind-uav-arm/
 |   |-- mission/           # Mission states + FailsafeMonitor
 |   |-- utils/             # Bus(pub-sub) / Config / Units / Logger
 |   +-- main.py            # MissionController (8-state FSM)
-|-- frontend/              # Tkinter dashboard (monitor)
+|-- frontend/              # Tkinter dashboard (legacy monitor; Web 3D is the main demo)
 |-- firmware/              # Arduino servo controller
 |-- config/                # YAML configuration files
 |-- data/                  # Flight logs + datasets
