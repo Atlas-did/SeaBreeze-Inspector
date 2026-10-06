@@ -1,0 +1,14 @@
+{
+  "protocol": "detection inference throughput (CPU)",
+  "model": "D:\\SeaBreeze Inspector\\SeaBreeze Inspector\\offshore-wind-uav-arm\\runs\\detect\\v5_2_yolo11s_1024_seed42\\weights\\best.pt",
+  "imgsz": 1024,
+  "n_images": 30,
+  "mean_ms_per_img": 233.7,
+  "median_ms_per_img": 229.3,
+  "p95_ms_per_img": 258.5,
+  "max_ms_per_img": 306.6,
+  "fps": 4.28,
+  "target_fps": 20.0,
+  "meets_20fps": false,
+  "note": "CPU 推理。若未达 20fps：报告如实写，达标路径=GPU/导出 TensorRT/降 imgsz/模型蒸馏"
+}

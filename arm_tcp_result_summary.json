@@ -1,0 +1,11 @@
+{
+  "protocol": "arm TCP precision measurement",
+  "base": "http://127.0.0.1:8765",
+  "n_targets": 8,
+  "mean_3d_err_m": 0.0043,
+  "max_3d_err_m": 0.0049,
+  "rms_3d_err_m": 0.0043,
+  "target_spec_mm": 10.0,
+  "pass_budget": true,
+  "note": "仿真 FK 自洽下误差应接近 0；若 >10mm 先查关节执行与 TCP 口径"
+}

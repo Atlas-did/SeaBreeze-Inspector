@@ -1,0 +1,100 @@
+{
+  "protocol": "omnisim gust injection + EKF disturbance feedforward demo",
+  "world": "seabreeze_tello_wind_headless.omniworld (port 6091)",
+  "wind": {
+    "enable": true,
+    "v_mean": 2.0,
+    "v_gust": 1.0,
+    "t_gust": 15.0,
+    "v_turb": 0.5,
+    "area_m2": 0.02,
+    "dir": [
+      1.0,
+      0.0,
+      0.0
+    ],
+    "seed": 7
+  },
+  "target_m": [
+    0.0,
+    0.0,
+    1.2
+  ],
+  "seconds_per_leg": 45.0,
+  "legs": [
+    {
+      "leg": "A_pid_baseline(median)",
+      "feedforward": false,
+      "rmse_m": 0.06821774022394611,
+      "runs": 2,
+      "all": [
+        0.09232799804937523,
+        0.04410748239851698
+      ]
+    },
+    {
+      "leg": "B_ekf_feedforward(median)",
+      "feedforward": true,
+      "rmse_m": 0.02765499655775903,
+      "runs": 2,
+      "all": [
+        0.02654010889680239,
+        0.028769884218715673
+      ]
+    }
+  ],
+  "pair_details": [
+    {
+      "pair": 1,
+      "a": {
+        "leg": "A1_pid_baseline",
+        "feedforward": false,
+        "rmse_m": 0.09232799804937523,
+        "p95_m": 0.14517835229635237,
+        "max_m": 0.15042200684547424,
+        "mean_wind_ms": 2.0514318181818183,
+        "n_samples": 396
+      },
+      "b": {
+        "leg": "B1_ekf_feedforward",
+        "feedforward": true,
+        "rmse_m": 0.02654010889680239,
+        "p95_m": 0.043329572305083275,
+        "max_m": 0.0952546149492266,
+        "mean_wind_ms": 2.473931758530184,
+        "n_samples": 381
+      },
+      "improve_pct": 71.3
+    },
+    {
+      "pair": 2,
+      "a": {
+        "leg": "A2_pid_baseline",
+        "feedforward": false,
+        "rmse_m": 0.04410748239851698,
+        "p95_m": 0.07069034688174725,
+        "max_m": 0.07535109668970108,
+        "mean_wind_ms": 2.008608695652174,
+        "n_samples": 391
+      },
+      "b": {
+        "leg": "B2_ekf_feedforward",
+        "feedforward": true,
+        "rmse_m": 0.028769884218715673,
+        "p95_m": 0.04643909018486738,
+        "max_m": 0.1002267897129061,
+        "mean_wind_ms": 2.499139175257732,
+        "n_samples": 388
+      },
+      "improve_pct": 34.8
+    }
+  ],
+  "rmse_improvement_pct": 59.5,
+  "honest_notes": [
+    "addForce drag-form injection = 等效阵风阻力，非真实风场",
+    "EKF 加速度通道由 /state 速度差分重构（桥不直接输出 IMU）",
+    "A/B 两腿同 wind seed，阵风剖面逐时刻一致",
+    "B 口径为位置域前馈（目标点修正），与算法包 v_cmd+=Kff*d_est 等效"
+  ],
+  "generated_at": "2026-09-14 14:01:38"
+}

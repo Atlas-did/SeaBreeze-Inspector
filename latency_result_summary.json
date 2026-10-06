@@ -1,0 +1,19 @@
+{
+  "protocol": "closed-loop latency (OmniSim sim, 命令→状态生效口径 T2; 往返口径 T1)",
+  "n_rounds": 50,
+  "t1_command_roundtrip_ms": {
+    "n": 50,
+    "mean_ms": 9.0,
+    "max_ms": 25.06,
+    "p95_ms": 21.99
+  },
+  "t2_closed_loop_ms": {
+    "n": 50,
+    "mean_ms": 43.94,
+    "max_ms": 231.07,
+    "p95_ms": 70.15
+  },
+  "evidence_key": "z",
+  "target_ms": 100.0,
+  "caveat": "仿真口径，真机待实测；不含视觉推理时延"
+}

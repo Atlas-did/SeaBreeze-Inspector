@@ -196,7 +196,6 @@ def main():
         "duration_s": args.seconds,
         "axes_measured": present,
         "per_axis": {},
-        "note": "未测到的维 = /state 无该坐标源，未测量",
     }
     trace = [dict(r) for r in rows]
     for ax in ("x", "y", "z"):
@@ -228,6 +227,26 @@ def main():
         summary["euclidean_3d_max_m"] = round(max(errs3d), 4)
         print(f"    三维 RMS = {summary['euclidean_3d_rms_m']} m, "
               f"max = {summary['euclidean_3d_max_m']} m")
+
+    # ---- 诚实性自检（2026-10-06 复核）----
+    # 1) note 改为动态：只有真的缺维时才说明，避免"axes_measured 全 true
+    #    但 note 仍写未测维"这种自相矛盾（旧版是静态模板字符串）。
+    missing = [ax for ax in ("x", "y", "z") if not present.get(ax)]
+    summary["note"] = ("未测到的维 = /state 无该坐标源，未测量: " + ",".join(missing)
+                       if missing else "三轴均有坐标源，全部实测")
+    # 2) 浮点零量级标记：无扰动仿真里控制器会把飞机钉在目标点上，误差落到
+    #    1e-18 之类的机器零 —— 那是"没有扰动"的同义反复，**不能**当作精度能力宣称。
+    #    带风的同一次测量才有区分度（本仓库实测 calm≈1e-18 vs wind 3D RMS≈1.07 m）。
+    overall = summary.get("euclidean_3d_max_m")
+    if overall is not None and overall < 1e-6:
+        summary["numerical_zero_flag"] = True
+        summary["numerical_zero_note"] = (
+            "误差处于浮点零量级（<1e-6 m）：该次测量未引入任何扰动，控制器把机体"
+            "钉在目标点属必然结果，属同义反复。**不可作为悬停精度能力宣称**；"
+            "请改用带扰动（风）的一组数字。")
+    else:
+        summary["numerical_zero_flag"] = False
+
     for ax in ("x", "y", "z"):
         s = summary["per_axis"][ax]
         print(f"    {ax}: " + ("未测量" if not s.get("measured")

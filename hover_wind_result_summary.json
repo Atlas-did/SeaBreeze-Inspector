@@ -1,0 +1,42 @@
+{
+  "protocol": "hover precision measurement",
+  "base": "http://127.0.0.1:6090",
+  "target": {
+    "x": 0.0,
+    "y": -12.0,
+    "z": 2.0
+  },
+  "samples": 393,
+  "duration_s": 45.0,
+  "axes_measured": {
+    "x": true,
+    "y": true,
+    "z": true
+  },
+  "per_axis": {
+    "x": {
+      "measured": true,
+      "mean_abs_err_m": 0.7345,
+      "max_abs_err_m": 1.4595,
+      "rms_err_m": 0.8537,
+      "target_m": 0.0
+    },
+    "y": {
+      "measured": true,
+      "mean_abs_err_m": 0.6292,
+      "max_abs_err_m": 0.7336,
+      "rms_err_m": 0.6347,
+      "target_m": -12.0
+    },
+    "z": {
+      "measured": true,
+      "mean_abs_err_m": 0.0804,
+      "max_abs_err_m": 0.1234,
+      "rms_err_m": 0.0842,
+      "target_m": 2.0
+    }
+  },
+  "note": "未测到的维 = /state 无该坐标源，未测量",
+  "euclidean_3d_rms_m": 1.0671,
+  "euclidean_3d_max_m": 1.634
+}
