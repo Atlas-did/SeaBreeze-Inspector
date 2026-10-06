@@ -1,4 +1,4 @@
-# install_vision_plugin.ps1
+﻿# install_vision_plugin.ps1
 # 把 dsh-vision-complete 安装到 ~\.dsh（skill + 截图工具），并配置为 Kimi 视觉模型。
 # 用法：powershell -ExecutionPolicy Bypass -File .\install_vision_plugin.ps1
 # 参数：

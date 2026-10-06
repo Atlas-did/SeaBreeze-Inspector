@@ -94,7 +94,19 @@ scripts/watch_training.py
 # adjudication_decisions / ood_test_EVAL_LOCK_final.json）—— 第三方要靠它们
 # 才能验证"OOD 只测了一次"这类声明。
 # ---------------------------------------------------------------------------
-datasets/**/images/
+datasets/**/*.jpg
+datasets/**/*.jpeg
+datasets/**/*.png
 datasets/**/labels/
 datasets/**/ood_test/
+
+# 误建嵌套输出：make_v5_2_split.py 的 --out 默认是相对路径 'v5_2'，
+# 在 research/v5_2/ 作 CWD 运行时就会生成 research/v5_2/v5_2/。
+# 实测 6085 文件 / 618.6 MB（3040 张图）。派生数据、可再生，不入库。
+research/v5_2/v5_2/
+
+# 编辑器/手改留下的备份快照（如加 BOM 前的 *.bak-nobom）—— 版本历史已在 git 里
+*.bak
+*.bak-*
+*.orig
 
