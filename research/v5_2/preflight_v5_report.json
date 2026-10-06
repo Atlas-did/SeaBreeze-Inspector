@@ -1,0 +1,128 @@
+{
+  "root": "D:\\SeaBreeze Inspector\\SeaBreeze Inspector\\datasets\\derived\\clean_binary_v5_scene_clean",
+  "core_splits": [
+    "train",
+    "val",
+    "test"
+  ],
+  "phash_enabled": false,
+  "checks": [
+    {
+      "name": "01_sha256_duplicate_cross_split",
+      "pass": true,
+      "detail": 0
+    },
+    {
+      "name": "02_parent_id_cross_split",
+      "pass": true,
+      "detail": 0
+    },
+    {
+      "name": "03_adjacent_scene_cross_split",
+      "pass": true,
+      "detail": 0
+    },
+    {
+      "name": "04_phash_neardup_cross_split",
+      "pass": null,
+      "detail": "imagehash 未安装,已降级为 sha256(见 01);实现 pHash 请 pip install imagehash pillow"
+    },
+    {
+      "name": "05_labels_parseable",
+      "pass": true,
+      "detail": 0
+    },
+    {
+      "name": "06_bbox_coords_in_01",
+      "pass": true,
+      "detail": 0
+    },
+    {
+      "name": "07_bbox_wh_positive",
+      "pass": true,
+      "detail": 0
+    },
+    {
+      "name": "08_bbox_within_image",
+      "pass": false,
+      "detail": 9
+    },
+    {
+      "name": "09_class_sets_consistent",
+      "pass": true,
+      "detail": {
+        "test": [
+          0
+        ],
+        "train": [
+          0
+        ],
+        "val": [
+          0
+        ]
+      }
+    },
+    {
+      "name": "10_target_scale_dist",
+      "pass": null,
+      "detail": {
+        "test": {
+          "n_boxes": 100,
+          "short_side_px": {
+            "min": 11.0,
+            "median": 100.0,
+            "max": 452.0
+          },
+          "short_side_hist": {
+            "<=16": 2,
+            "<=32": 3,
+            "<=64": 12,
+            "<=128": 43,
+            ">128": 40
+          }
+        },
+        "train": {
+          "n_boxes": 546,
+          "short_side_px": {
+            "min": 4.0,
+            "median": 33.0,
+            "max": 390.0
+          },
+          "short_side_hist": {
+            "<=16": 47,
+            "<=32": 212,
+            "<=64": 172,
+            "<=128": 72,
+            ">128": 43
+          }
+        },
+        "val": {
+          "n_boxes": 123,
+          "short_side_px": {
+            "min": 10.0,
+            "median": 75.0,
+            "max": 400.0
+          },
+          "short_side_hist": {
+            "<=16": 2,
+            "<=32": 6,
+            "<=64": 40,
+            "<=128": 55,
+            ">128": 20
+          }
+        }
+      }
+    }
+  ],
+  "summary": {
+    "total_checks": 10,
+    "hard_failures": [
+      "08_bbox_within_image"
+    ],
+    "n_hard_failures": 1,
+    "soft_degraded": [
+      "04_phash_neardup_cross_split",
+      "10_target_scale_dist"
+    ]
+  }
+}

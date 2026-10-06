@@ -1,0 +1,146 @@
+{
+  "root": "D:\\SeaBreeze Inspector\\SeaBreeze Inspector\\offshore-wind-uav-arm\\research\\v5_2\\v5_2",
+  "core_splits": [
+    "train",
+    "id_val",
+    "ood_test"
+  ],
+  "phash_enabled": false,
+  "checks": [
+    {
+      "name": "01_sha256_duplicate_cross_split",
+      "pass": true,
+      "detail": 0
+    },
+    {
+      "name": "02_parent_id_cross_split",
+      "pass": true,
+      "detail": 0
+    },
+    {
+      "name": "03_adjacent_scene_cross_split",
+      "pass": true,
+      "detail": 0
+    },
+    {
+      "name": "04_phash_neardup_cross_split",
+      "pass": null,
+      "detail": "imagehash 未安装,已降级为 sha256(见 01);实现 pHash 请 pip install imagehash pillow"
+    },
+    {
+      "name": "05_labels_parseable",
+      "pass": true,
+      "detail": 0
+    },
+    {
+      "name": "06_bbox_coords_in_01",
+      "pass": true,
+      "detail": 0
+    },
+    {
+      "name": "07_bbox_wh_positive",
+      "pass": true,
+      "detail": 0
+    },
+    {
+      "name": "08_bbox_within_image",
+      "pass": false,
+      "detail": 9
+    },
+    {
+      "name": "09_class_sets_consistent",
+      "pass": true,
+      "detail": {
+        "id_val": [
+          0
+        ],
+        "ood_test": [
+          0
+        ],
+        "review": [
+          0
+        ],
+        "train": [
+          0
+        ]
+      }
+    },
+    {
+      "name": "10_target_scale_dist",
+      "pass": null,
+      "detail": {
+        "id_val": {
+          "n_boxes": 88,
+          "short_side_px": {
+            "min": 17.0,
+            "median": 32.0,
+            "max": 394.0
+          },
+          "short_side_hist": {
+            "<=16": 0,
+            "<=32": 42,
+            "<=64": 23,
+            "<=128": 16,
+            ">128": 7
+          }
+        },
+        "ood_test": {
+          "n_boxes": 68,
+          "short_side_px": {
+            "min": 17.0,
+            "median": 45.0,
+            "max": 352.0
+          },
+          "short_side_hist": {
+            "<=16": 0,
+            "<=32": 18,
+            "<=64": 33,
+            "<=128": 9,
+            ">128": 8
+          }
+        },
+        "review": {
+          "n_boxes": 315,
+          "short_side_px": {
+            "min": 0.0,
+            "median": 42.0,
+            "max": 400.0
+          },
+          "short_side_hist": {
+            "<=16": 63,
+            "<=32": 62,
+            "<=64": 78,
+            "<=128": 66,
+            ">128": 46
+          }
+        },
+        "train": {
+          "n_boxes": 310,
+          "short_side_px": {
+            "min": 17.0,
+            "median": 49.0,
+            "max": 452.0
+          },
+          "short_side_hist": {
+            "<=16": 0,
+            "<=32": 99,
+            "<=64": 90,
+            "<=128": 79,
+            ">128": 42
+          }
+        }
+      }
+    }
+  ],
+  "summary": {
+    "total_checks": 10,
+    "hard_failures": [
+      "08_bbox_within_image"
+    ],
+    "n_hard_failures": 1,
+    "soft_degraded": [
+      "04_phash_neardup_cross_split",
+      "10_target_scale_dist"
+    ]
+  }
+}

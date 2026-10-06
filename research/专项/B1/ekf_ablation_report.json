@@ -1,0 +1,101 @@
+{
+  "u_feed": true,
+  "scenario": "step",
+  "dt_s": 0.01,
+  "n": 1000,
+  "sigma_acc": 0.05,
+  "sigma_pos": 0.05,
+  "Q_base": 1e-05,
+  "u_const": 1.0,
+  "seed": 0,
+  "adaptive": {
+    "alpha": 0.5,
+    "q_scale_max": 30.0,
+    "note": "Mahalanobis D²>χ²₂(0.95)=5.991 时放大 Q,与真实观测器同一机制(真实:α=0.3/×10)"
+  },
+  "fixed_vs_adaptive": {
+    "fixed_Q": {
+      "rmse": 0.08884894298286376,
+      "settle_time_ms": 480.0,
+      "overshoot_pct": 2.3789642956854706,
+      "steady_rmse": 0.013998187912541626,
+      "Q_d_base": 1e-05,
+      "adaptive": false
+    },
+    "adaptive_Q": {
+      "rmse": 0.05512102358176374,
+      "settle_time_ms": 250.0,
+      "overshoot_pct": 2.3793616112892657,
+      "steady_rmse": 0.01400928890049427,
+      "Q_d_base": 1e-05,
+      "adaptive": true
+    }
+  },
+  "static_baseline": {
+    "d_hat_std": 0.010320126045540312,
+    "d_hat_mean": -0.0014656063336445514
+  },
+  "u_feed_check": {
+    "u_const": 1.0,
+    "d_true_after_step": 2.0,
+    "d_hat_tail_mean": 1.9949007890134483,
+    "ok": true,
+    "note": "ok=True 表示 u 馈入生效(未被误当扰动);旧版此值≈3.0(偏差被吃进 d_hat)"
+  },
+  "QxR_grid": {
+    "Qd=1e-05,σacc=0.02": {
+      "rmse": 0.05285153289512859,
+      "settle_time_ms": 210.0,
+      "overshoot_pct": 1.5182742447496622,
+      "steady_rmse": 0.007995306716648432
+    },
+    "Qd=1e-05,σacc=0.05": {
+      "rmse": 0.08884894298286376,
+      "settle_time_ms": 480.0,
+      "overshoot_pct": 2.3789642956854706,
+      "steady_rmse": 0.013998187912541626
+    },
+    "Qd=1e-05,σacc=0.2": {
+      "rmse": 0.18530080201433233,
+      "settle_time_ms": 1650.0000000000002,
+      "overshoot_pct": 4.183305984104102,
+      "steady_rmse": 0.02215488289812572
+    },
+    "Qd=0.0001,σacc=0.02": {
+      "rmse": 0.02657469513915914,
+      "settle_time_ms": 120.0,
+      "overshoot_pct": 3.1172479285412003,
+      "steady_rmse": 0.011849772289997347
+    },
+    "Qd=0.0001,σacc=0.05": {
+      "rmse": 0.04956423617043565,
+      "settle_time_ms": 190.0,
+      "overshoot_pct": 4.188682305461322,
+      "steady_rmse": 0.021647435764602846
+    },
+    "Qd=0.0001,σacc=0.2": {
+      "rmse": 0.11301976537957382,
+      "settle_time_ms": 4950.0,
+      "overshoot_pct": 8.348592595199156,
+      "steady_rmse": 0.049815383016986126
+    },
+    "Qd=0.001,σacc=0.02": {
+      "rmse": 0.017663112454644043,
+      "settle_time_ms": 100.0,
+      "overshoot_pct": 4.711930415817411,
+      "steady_rmse": 0.017660504367883155
+    },
+    "Qd=0.001,σacc=0.05": {
+      "rmse": 0.03506073821287291,
+      "settle_time_ms": 110.0,
+      "overshoot_pct": 8.846113925045662,
+      "steady_rmse": 0.03226638842753512
+    },
+    "Qd=0.001,σacc=0.2": {
+      "rmse": 0.08571197869395186,
+      "settle_time_ms": 4960.0,
+      "overshoot_pct": 15.188078719843734,
+      "steady_rmse": 0.07993934031045295
+    }
+  }
+}

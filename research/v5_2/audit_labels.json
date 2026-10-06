@@ -1,0 +1,76 @@
+{
+  "mode": "split",
+  "total_boxes": 781,
+  "per_split": {
+    "train": {
+      "images": 2120,
+      "positive_images": 423,
+      "boxes": 559,
+      "extreme_ar": 18,
+      "touch_boundary": 175,
+      "small_short": 46,
+      "invalid": 5,
+      "uncertain": 184,
+      "valid": 370,
+      "ar_hist": {
+        "<5": 514,
+        ">=10": 18,
+        ">=5": 27
+      },
+      "short_side_hist": {
+        "<=32": 162,
+        "<=16": 46,
+        ">32": 351
+      },
+      "scene_blocks": 212
+    },
+    "val": {
+      "images": 440,
+      "positive_images": 82,
+      "boxes": 113,
+      "extreme_ar": 8,
+      "touch_boundary": 28,
+      "small_short": 11,
+      "invalid": 1,
+      "uncertain": 31,
+      "valid": 81,
+      "ar_hist": {
+        "<5": 103,
+        ">=5": 2,
+        ">=10": 8
+      },
+      "short_side_hist": {
+        ">32": 74,
+        "<=16": 11,
+        "<=32": 28
+      },
+      "scene_blocks": 44
+    },
+    "test": {
+      "images": 480,
+      "positive_images": 82,
+      "boxes": 109,
+      "extreme_ar": 0,
+      "touch_boundary": 17,
+      "small_short": 6,
+      "invalid": 3,
+      "uncertain": 18,
+      "valid": 88,
+      "ar_hist": {
+        "<5": 109
+      },
+      "short_side_hist": {
+        ">32": 72,
+        "<=32": 31,
+        "<=16": 6
+      },
+      "scene_blocks": 48
+    }
+  },
+  "review_summary": {
+    "valid": 539,
+    "uncertain": 233,
+    "invalid": 9
+  },
+  "note": "脚本只做几何/格式客观审查;'框内是否真缺陷'为语义判断,几何异常的框统一置 uncertain 待人工"
+}

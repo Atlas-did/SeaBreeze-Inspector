@@ -1,0 +1,243 @@
+image_path,scene_block_id,split,n_boxes,box_w,box_h,box_area,aspect_ratio,touches_boundary,short_side,review_status,review_note
+images\train\DJI_0007_0_2.jpg,DJI_0007,train,1,41.0,32.0,1311.99,1.2813,1,32.0,uncertain,touches_boundary
+images\train\DJI_0007_0_3.jpg,DJI_0007,train,2,0.0,32.0,0.07,15624.5,1,0.0,uncertain,touches_boundary; extreme_aspect_ratio=15624.50; short_side<=16px
+images\train\DJI_0007_1_1.jpg,DJI_0007,train,1,49.0,23.0,1126.97,2.1304,1,23.0,uncertain,touches_boundary
+images\train\DJI_0008_0_3.jpg,DJI_0008,train,2,33.0,32.0,1055.98,1.0313,1,32.0,uncertain,touches_boundary
+images\train\DJI_0008_1_1.jpg,DJI_0008,train,1,43.0,7.0,300.96,6.1438,1,7.0,uncertain,touches_boundary; short_side<=16px
+images\train\DJI_0010_0_4.jpg,DJI_0010,train,1,13.0,20.0,259.99,1.5385,1,13.0,uncertain,touches_boundary; short_side<=16px
+images\train\DJI_0012_0_3.jpg,DJI_0012,train,2,41.0,23.0,942.95,1.7825,1,23.0,uncertain,touches_boundary
+images\train\DJI_0012_0_4.jpg,DJI_0012,train,1,2.0,23.0,46.02,11.4949,1,2.0,uncertain,touches_boundary; extreme_aspect_ratio=11.49; short_side<=16px
+images\train\DJI_0016_0_3.jpg,DJI_0016,train,1,41.0,34.0,1394.0,1.2058,1,34.0,uncertain,touches_boundary
+images\train\DJI_0024_0_2.jpg,DJI_0024,train,2,33.0,14.0,461.98,2.3573,1,14.0,uncertain,touches_boundary; short_side<=16px
+images\train\DJI_0024_1_2.jpg,DJI_0024,train,1,33.0,14.0,462.01,2.3572,1,14.0,uncertain,touches_boundary; short_side<=16px
+images\train\DJI_0025_0_2.jpg,DJI_0025,train,2,33.0,36.0,1188.01,1.0909,1,33.0,uncertain,touches_boundary
+images\train\DJI_0027_0_1.jpg,DJI_0027,train,1,5.0,136.0,680.3,27.1877,1,5.0,uncertain,touches_boundary; extreme_aspect_ratio=27.19; short_side<=16px
+images\train\DJI_0027_0_2.jpg,DJI_0027,train,3,54.0,136.0,7343.92,2.5185,1,54.0,uncertain,touches_boundary
+images\train\DJI_0028_0_2.jpg,DJI_0028,train,2,57.0,182.0,10373.54,3.1931,1,57.0,uncertain,touches_boundary
+images\train\DJI_0030_0_2.jpg,DJI_0030,train,1,52.0,237.0,12323.44,4.5579,1,52.0,uncertain,touches_boundary
+images\train\DJI_0031_0_1.jpg,DJI_0031,train,1,26.0,215.0,5589.67,8.2698,1,26.0,uncertain,touches_boundary
+images\train\DJI_0031_0_2.jpg,DJI_0031,train,1,17.0,215.0,3655.11,12.6468,1,17.0,uncertain,touches_boundary; extreme_aspect_ratio=12.65
+images\train\DJI_0032_0_2.jpg,DJI_0032,train,1,30.0,242.0,7260.24,8.0663,1,30.0,uncertain,touches_boundary
+images\train\DJI_0034_0_2.jpg,DJI_0034,train,1,46.0,302.0,13891.78,6.5654,1,46.0,uncertain,touches_boundary
+images\train\DJI_0034_1_2.jpg,DJI_0034,train,5,16.0,16.0,255.95,1.0001,0,16.0,uncertain,short_side<=16px
+images\train\DJI_0034_1_2.jpg,DJI_0034,train,5,15.0,19.0,285.0,1.2666,0,15.0,uncertain,short_side<=16px
+images\train\DJI_0035_1_2.jpg,DJI_0035,train,3,40.0,6.0,239.95,6.6685,1,6.0,uncertain,touches_boundary; short_side<=16px
+images\train\DJI_0046_1_0.jpg,DJI_0046,train,1,116.0,13.0,1508.22,8.922,1,13.0,uncertain,touches_boundary; short_side<=16px
+images\train\DJI_0050_0_2.jpg,DJI_0050,train,1,66.0,91.0,6005.95,1.3788,1,66.0,uncertain,touches_boundary
+images\train\DJI_0050_0_3.jpg,DJI_0050,train,2,22.0,91.0,2002.08,4.1363,1,22.0,uncertain,touches_boundary
+images\train\DJI_0051_0_2.jpg,DJI_0051,train,1,94.0,88.0,8272.07,1.0682,1,88.0,uncertain,touches_boundary
+images\train\DJI_0051_0_3.jpg,DJI_0051,train,2,14.0,88.0,1232.12,6.2853,1,14.0,uncertain,touches_boundary; short_side<=16px
+images\train\DJI_0056_0_3.jpg,DJI_0056,train,1,52.0,44.0,2288.02,1.1817,1,44.0,uncertain,touches_boundary
+images\train\DJI_0056_1_3.jpg,DJI_0056,train,2,52.0,6.0,311.91,8.6683,1,6.0,uncertain,touches_boundary; short_side<=16px
+images\train\DJI_0061_0_3.jpg,DJI_0061,train,1,41.0,41.0,1680.99,1.0,1,41.0,uncertain,touches_boundary
+images\train\DJI_0061_1_2.jpg,DJI_0061,train,1,66.0,77.0,5081.96,1.1667,1,66.0,uncertain,touches_boundary
+images\train\DJI_0061_1_3.jpg,DJI_0061,train,1,25.0,77.0,1925.01,3.08,1,25.0,uncertain,touches_boundary
+images\train\DJI_0088_0_2.jpg,DJI_0088,train,1,20.0,2.0,39.98,10.0061,1,2.0,uncertain,touches_boundary; extreme_aspect_ratio=10.01; short_side<=16px
+images\train\DJI_0088_1_2.jpg,DJI_0088,train,2,20.0,16.0,320.01,1.25,1,16.0,uncertain,touches_boundary; short_side<=16px
+images\train\DJI_0089_0_2.jpg,DJI_0089,train,1,24.0,3.0,72.02,7.9956,1,3.0,uncertain,touches_boundary; short_side<=16px
+images\train\DJI_0089_1_2.jpg,DJI_0089,train,2,24.0,22.0,527.91,1.0909,1,22.0,invalid,out_of_bounds
+images\train\DJI_0090_1_2.jpg,DJI_0090,train,2,18.0,15.0,270.03,1.1999,0,15.0,uncertain,short_side<=16px
+images\train\DJI_0095_1_2.jpg,DJI_0095,train,1,24.0,16.0,383.93,1.4999,0,16.0,uncertain,short_side<=16px
+images\train\DJI_0095_1_3.jpg,DJI_0095,train,1,23.0,16.0,367.98,1.4376,1,16.0,uncertain,touches_boundary; short_side<=16px
+images\train\DJI_0098_0_0.jpg,DJI_0098,train,1,34.0,66.0,2243.82,1.9413,1,34.0,uncertain,touches_boundary
+images\train\DJI_0098_0_1.jpg,DJI_0098,train,2,24.0,66.0,1584.01,2.7499,1,24.0,uncertain,touches_boundary
+images\train\DJI_0103_0_0.jpg,DJI_0103,train,1,44.0,63.0,2771.87,1.4319,1,44.0,uncertain,touches_boundary
+images\train\DJI_0103_0_1.jpg,DJI_0103,train,2,8.0,63.0,504.16,7.8724,1,8.0,invalid,out_of_bounds
+images\train\DJI_0105_1_3.jpg,DJI_0105,train,1,33.0,1.0,32.98,33.0195,1,1.0,uncertain,touches_boundary; extreme_aspect_ratio=33.02; short_side<=16px
+images\train\DJI_0118_1_2.jpg,DJI_0118,train,1,37.0,129.0,4773.27,3.4863,1,37.0,uncertain,touches_boundary
+images\train\DJI_0120_0_3.jpg,DJI_0120,train,1,23.0,19.0,437.01,1.2105,1,19.0,uncertain,touches_boundary
+images\train\DJI_0120_1_3.jpg,DJI_0120,train,1,23.0,31.0,713.02,1.3478,1,23.0,uncertain,touches_boundary
+images\train\DJI_0122_1_2.jpg,DJI_0122,train,1,29.0,39.0,1130.94,1.345,1,29.0,uncertain,touches_boundary
+images\train\DJI_0123_0_3.jpg,DJI_0123,train,2,44.0,38.0,1671.92,1.1579,1,38.0,uncertain,touches_boundary
+images\train\DJI_0123_1_3.jpg,DJI_0123,train,1,44.0,7.0,307.99,6.2854,1,7.0,uncertain,touches_boundary; short_side<=16px
+images\train\DJI_0156_0_3.jpg,DJI_0156,train,2,20.0,16.0,319.99,1.2501,0,16.0,uncertain,short_side<=16px
+images\train\DJI_0161_0_2.jpg,DJI_0161,train,1,20.0,16.0,319.99,1.2501,0,16.0,uncertain,short_side<=16px
+images\train\DJI_0164_0_2.jpg,DJI_0164,train,1,15.0,2.0,29.98,7.5046,1,2.0,uncertain,touches_boundary; short_side<=16px
+images\train\DJI_0164_1_2.jpg,DJI_0164,train,1,15.0,19.0,285.02,1.2666,1,15.0,invalid,out_of_bounds
+images\train\DJI_0165_0_2.jpg,DJI_0165,train,1,16.0,16.0,255.95,1.0001,1,16.0,uncertain,touches_boundary; short_side<=16px
+images\train\DJI_0166_0_2.jpg,DJI_0166,train,2,27.0,19.0,513.06,1.4213,1,19.0,uncertain,touches_boundary
+images\train\DJI_0166_0_3.jpg,DJI_0166,train,2,4.0,19.0,75.95,4.7526,1,4.0,uncertain,touches_boundary; short_side<=16px
+images\train\DJI_0167_0_2.jpg,DJI_0167,train,1,14.0,19.0,266.03,1.3569,0,14.0,uncertain,short_side<=16px
+images\train\DJI_0167_0_3.jpg,DJI_0167,train,2,25.0,16.0,399.99,1.5627,0,16.0,uncertain,short_side<=16px
+images\train\DJI_0168_1_2.jpg,DJI_0168,train,1,15.0,15.0,225.03,1.0001,1,15.0,uncertain,touches_boundary; short_side<=16px
+images\train\DJI_0172_0_3.jpg,DJI_0172,train,2,21.0,14.0,293.98,1.4999,0,14.0,uncertain,short_side<=16px
+images\train\DJI_0175_1_2.jpg,DJI_0175,train,3,15.0,14.0,210.01,1.0715,0,14.0,uncertain,short_side<=16px
+images\train\DJI_0183_0_1.jpg,DJI_0183,train,1,45.0,3.0,134.97,15.0041,1,3.0,uncertain,touches_boundary; extreme_aspect_ratio=15.00; short_side<=16px
+images\train\DJI_0183_1_1.jpg,DJI_0183,train,1,45.0,37.0,1665.12,1.2162,1,37.0,uncertain,touches_boundary
+images\train\DJI_0195_1_4.jpg,DJI_0195,train,1,116.0,157.0,18212.24,1.3534,1,116.0,uncertain,touches_boundary
+images\train\DJI_0197_1_1.jpg,DJI_0197,train,1,44.0,104.0,4576.37,2.3635,1,44.0,uncertain,touches_boundary
+images\train\DJI_0197_1_2.jpg,DJI_0197,train,1,86.0,104.0,8944.0,1.2093,1,86.0,uncertain,touches_boundary
+images\train\DJI_0197_1_4.jpg,DJI_0197,train,1,126.0,143.0,18018.25,1.1349,1,126.0,uncertain,touches_boundary
+images\train\DJI_0200_0_2.jpg,DJI_0200,train,1,74.0,23.0,1701.89,3.2175,1,23.0,uncertain,touches_boundary
+images\train\DJI_0200_0_3.jpg,DJI_0200,train,1,14.0,23.0,322.01,1.6427,1,14.0,uncertain,touches_boundary; short_side<=16px
+images\train\DJI_0200_1_1.jpg,DJI_0200,train,1,44.0,112.0,4927.98,2.5454,1,44.0,uncertain,touches_boundary
+images\train\DJI_0200_1_2.jpg,DJI_0200,train,2,74.0,97.0,7177.95,1.3109,1,74.0,uncertain,touches_boundary
+images\train\DJI_0200_1_2.jpg,DJI_0200,train,2,50.0,112.0,5599.71,2.2401,1,50.0,uncertain,touches_boundary
+images\train\DJI_0200_1_3.jpg,DJI_0200,train,1,14.0,97.0,1358.13,6.9281,1,14.0,uncertain,touches_boundary; short_side<=16px
+images\train\DJI_0202_0_2.jpg,DJI_0202,train,2,19.0,16.0,303.94,1.1874,0,16.0,uncertain,short_side<=16px
+images\train\DJI_0202_0_2.jpg,DJI_0202,train,2,13.0,16.0,207.98,1.2307,0,13.0,uncertain,short_side<=16px
+images\train\DJI_0205_1_2.jpg,DJI_0205,train,7,49.0,53.0,2596.97,1.0817,1,49.0,uncertain,touches_boundary
+images\train\DJI_0211_0_2.jpg,DJI_0211,train,3,35.0,122.0,4270.11,3.4855,1,35.0,uncertain,touches_boundary
+images\train\DJI_0213_1_2.jpg,DJI_0213,train,2,73.0,87.0,6351.09,1.1918,1,73.0,uncertain,touches_boundary
+images\train\DJI_0214_0_2.jpg,DJI_0214,train,1,52.0,39.0,2027.91,1.3333,1,39.0,uncertain,touches_boundary
+images\train\DJI_0214_1_2.jpg,DJI_0214,train,2,52.0,57.0,2963.87,1.0962,1,52.0,uncertain,touches_boundary
+images\train\DJI_0214_1_2.jpg,DJI_0214,train,2,60.0,64.0,3840.21,1.0666,1,60.0,uncertain,touches_boundary
+images\train\DJI_0234_0_2.jpg,DJI_0234,train,1,23.0,441.0,10143.05,19.1739,1,23.0,uncertain,touches_boundary; extreme_aspect_ratio=19.17
+images\train\DJI_0234_1_2.jpg,DJI_0234,train,1,22.0,20.0,440.03,1.1001,0,20.0,uncertain,ClawsGO priority recheck (no geometric flag)
+images\train\DJI_0235_0_2.jpg,DJI_0235,train,1,42.0,1022.0,42926.45,24.3319,1,42.0,uncertain,touches_boundary; extreme_aspect_ratio=24.33
+images\train\DJI_0235_1_2.jpg,DJI_0235,train,1,42.0,51.0,2142.14,1.2142,1,42.0,uncertain,touches_boundary
+images\train\DJI_0237_0_3.jpg,DJI_0237,train,1,124.0,1020.0,126481.46,8.2257,1,124.0,uncertain,touches_boundary
+images\train\DJI_0237_1_3.jpg,DJI_0237,train,1,124.0,679.0,84196.75,5.4757,1,124.0,uncertain,touches_boundary
+images\train\DJI_0245_1_2.jpg,DJI_0245,train,1,75.0,78.0,5850.31,1.04,1,75.0,uncertain,touches_boundary
+images\train\DJI_0247_1_2.jpg,DJI_0247,train,2,201.0,67.0,13466.79,3.0,1,67.0,uncertain,touches_boundary
+images\train\DJI_0249_0_3.jpg,DJI_0249,train,1,159.0,150.0,23850.03,1.06,1,150.0,uncertain,touches_boundary
+images\train\DJI_0249_0_4.jpg,DJI_0249,train,1,10.0,150.0,1500.05,14.9994,1,10.0,uncertain,touches_boundary; extreme_aspect_ratio=15.00; short_side<=16px
+images\train\DJI_0249_1_3.jpg,DJI_0249,train,1,279.0,180.0,50219.94,1.55,0,180.0,uncertain,ClawsGO priority recheck (no geometric flag)
+images\train\DJI_0251_0_3.jpg,DJI_0251,train,1,120.0,229.0,27479.78,1.9083,1,120.0,uncertain,touches_boundary
+images\train\DJI_0251_0_4.jpg,DJI_0251,train,1,219.0,229.0,50151.01,1.0457,1,219.0,uncertain,touches_boundary
+images\train\DJI_0335_1_2.jpg,DJI_0335,train,1,126.0,265.0,33389.61,2.1032,1,126.0,uncertain,touches_boundary
+images\train\DJI_0335_1_3.jpg,DJI_0335,train,1,178.0,265.0,47170.41,1.4888,1,178.0,uncertain,touches_boundary
+images\train\DJI_0337_0_4.jpg,DJI_0337,train,1,175.0,211.0,36925.18,1.2057,1,175.0,uncertain,touches_boundary
+images\train\DJI_0337_1_3.jpg,DJI_0337,train,1,340.0,295.0,100300.9,1.1525,1,295.0,uncertain,touches_boundary
+images\train\DJI_0337_1_4.jpg,DJI_0337,train,1,19.0,295.0,5604.81,15.5269,1,19.0,uncertain,touches_boundary; extreme_aspect_ratio=15.53
+images\train\DJI_0338_0_3.jpg,DJI_0338,train,1,39.0,405.0,15795.9,10.3841,1,39.0,uncertain,touches_boundary; extreme_aspect_ratio=10.38
+images\train\DJI_0338_0_4.jpg,DJI_0338,train,1,391.0,405.0,158355.09,1.0358,1,391.0,uncertain,touches_boundary
+images\train\DJI_0339_0_4.jpg,DJI_0339,train,1,459.0,278.0,127602.53,1.6511,1,278.0,uncertain,touches_boundary
+images\train\DJI_0358_0_2.jpg,DJI_0358,train,1,130.0,121.0,15729.99,1.0744,1,121.0,uncertain,touches_boundary
+images\train\DJI_0361_1_2.jpg,DJI_0361,train,1,115.0,38.0,4370.13,3.0261,1,38.0,uncertain,touches_boundary
+images\train\DJI_0378_0_3.jpg,DJI_0378,train,2,109.0,45.0,4905.22,2.4221,1,45.0,uncertain,touches_boundary
+images\train\DJI_0388_0_4.jpg,DJI_0388,train,1,49.0,80.0,3920.12,1.6326,1,49.0,uncertain,touches_boundary
+images\train\DJI_0393_0_4.jpg,DJI_0393,train,2,110.0,98.0,10779.8,1.1224,1,98.0,uncertain,touches_boundary
+images\train\DJI_0393_0_4.jpg,DJI_0393,train,2,4.0,95.0,380.27,23.7337,1,4.0,uncertain,touches_boundary; extreme_aspect_ratio=23.73; short_side<=16px
+images\train\DJI_0393_1_4.jpg,DJI_0393,train,1,110.0,1.0,110.05,109.9488,1,1.0,uncertain,touches_boundary; extreme_aspect_ratio=109.95; short_side<=16px
+images\train\DJI_0396_0_3.jpg,DJI_0396,train,1,66.0,64.0,4223.93,1.0312,1,64.0,uncertain,touches_boundary
+images\train\DJI_0396_0_4.jpg,DJI_0396,train,2,24.0,64.0,1536.19,2.6664,1,24.0,uncertain,touches_boundary
+images\train\DJI_0408_0_0.jpg,DJI_0408,train,1,545.0,264.0,143880.67,2.0644,1,264.0,uncertain,touches_boundary
+images\train\DJI_0409_0_1.jpg,DJI_0409,train,1,103.0,228.0,23484.46,2.2135,1,103.0,uncertain,touches_boundary
+images\train\DJI_0409_0_2.jpg,DJI_0409,train,1,297.0,228.0,67715.68,1.3026,1,228.0,uncertain,touches_boundary
+images\train\DJI_0409_1_1.jpg,DJI_0409,train,1,103.0,125.0,12875.34,1.2136,1,103.0,uncertain,touches_boundary
+images\train\DJI_0409_1_2.jpg,DJI_0409,train,1,297.0,125.0,37125.07,2.376,1,125.0,uncertain,touches_boundary
+images\train\DJI_0411_0_2.jpg,DJI_0411,train,1,370.0,238.0,88060.64,1.5546,1,238.0,uncertain,touches_boundary
+images\train\DJI_0411_1_2.jpg,DJI_0411,train,1,370.0,131.0,48469.86,2.8244,1,131.0,invalid,out_of_bounds
+images\train\DJI_0412_1_2.jpg,DJI_0412,train,1,255.0,330.0,84150.36,1.2941,1,255.0,uncertain,touches_boundary
+images\train\DJI_0412_1_3.jpg,DJI_0412,train,1,64.0,330.0,21119.28,5.1564,1,64.0,uncertain,touches_boundary
+images\train\DJI_0414_1_3.jpg,DJI_0414,train,1,45.0,32.0,1440.13,1.4063,1,32.0,uncertain,touches_boundary
+images\train\DJI_0414_1_4.jpg,DJI_0414,train,1,199.0,32.0,6368.21,6.2186,1,32.0,uncertain,touches_boundary
+images\train\DJI_0415_1_3.jpg,DJI_0415,train,1,261.0,97.0,25316.97,2.6908,1,97.0,uncertain,touches_boundary
+images\train\DJI_0416_1_3.jpg,DJI_0416,train,1,285.0,42.0,11970.05,6.7856,1,42.0,uncertain,touches_boundary
+images\train\DJI_0417_1_4.jpg,DJI_0417,train,1,118.0,82.0,9675.66,1.439,1,82.0,uncertain,touches_boundary
+images\train\DJI_0424_1_3.jpg,DJI_0424,train,1,140.0,146.0,20439.88,1.0428,1,140.0,uncertain,touches_boundary
+images\train\DJI_0424_1_4.jpg,DJI_0424,train,1,54.0,146.0,7884.03,2.7037,1,54.0,uncertain,touches_boundary
+images\train\DJI_0427_1_2.jpg,DJI_0427,train,1,101.0,129.0,13028.97,1.2772,1,101.0,uncertain,touches_boundary
+images\train\DJI_0427_1_3.jpg,DJI_0427,train,1,103.0,129.0,13287.08,1.2524,1,103.0,uncertain,touches_boundary
+images\train\DJI_0428_1_3.jpg,DJI_0428,train,1,210.0,160.0,33600.31,1.3125,1,160.0,uncertain,touches_boundary
+images\train\DJI_0429_1_2.jpg,DJI_0429,train,1,206.0,155.0,31930.35,1.329,1,155.0,uncertain,touches_boundary
+images\train\DJI_0429_1_3.jpg,DJI_0429,train,1,13.0,155.0,2015.12,11.9225,1,13.0,uncertain,touches_boundary; extreme_aspect_ratio=11.92; short_side<=16px
+images\train\DJI_0429_1_4.jpg,DJI_0429,train,1,24.0,165.0,3959.78,6.8755,1,24.0,uncertain,touches_boundary
+images\train\DJI_0432_0_2.jpg,DJI_0432,train,1,285.0,29.0,8265.16,9.8273,1,29.0,uncertain,touches_boundary
+images\train\DJI_0432_1_0.jpg,DJI_0432,train,1,240.0,130.0,31200.24,1.8462,1,130.0,uncertain,touches_boundary
+images\train\DJI_0432_1_2.jpg,DJI_0432,train,1,285.0,101.0,28784.92,2.8218,1,101.0,uncertain,touches_boundary
+images\train\DJI_0440_1_1.jpg,DJI_0440,train,1,250.0,182.0,45499.16,1.3736,1,182.0,uncertain,touches_boundary
+images\train\DJI_0442_0_2.jpg,DJI_0442,train,1,321.0,83.0,26642.56,3.8675,1,83.0,uncertain,touches_boundary
+images\train\DJI_0442_1_2.jpg,DJI_0442,train,1,321.0,235.0,75434.32,1.3659,1,235.0,uncertain,touches_boundary
+images\train\DJI_0445_1_4.jpg,DJI_0445,train,1,34.0,351.0,11934.33,10.3233,1,34.0,uncertain,touches_boundary; extreme_aspect_ratio=10.32
+images\train\DJI_0446_1_3.jpg,DJI_0446,train,1,10.0,285.0,2849.53,28.5048,1,10.0,uncertain,touches_boundary; extreme_aspect_ratio=28.50; short_side<=16px
+images\train\DJI_0446_1_4.jpg,DJI_0446,train,1,294.0,285.0,83790.39,1.0316,1,285.0,uncertain,touches_boundary
+images\train\DJI_0447_1_2.jpg,DJI_0447,train,1,222.0,259.0,57497.61,1.1667,1,222.0,uncertain,touches_boundary
+images\train\DJI_0447_1_3.jpg,DJI_0447,train,1,3.0,259.0,777.08,86.3239,1,3.0,uncertain,touches_boundary; extreme_aspect_ratio=86.32; short_side<=16px
+images\train\DJI_0449_0_1.jpg,DJI_0449,train,1,112.0,298.0,33376.35,2.6607,1,112.0,uncertain,touches_boundary
+images\train\DJI_0449_0_2.jpg,DJI_0449,train,1,237.0,298.0,70625.69,1.2574,1,237.0,uncertain,touches_boundary
+images\train\DJI_0449_1_1.jpg,DJI_0449,train,1,112.0,96.0,10752.1,1.1667,1,96.0,uncertain,touches_boundary
+images\train\DJI_0449_1_2.jpg,DJI_0449,train,1,237.0,96.0,22751.87,2.4687,1,96.0,uncertain,touches_boundary
+images\train\DJI_0451_1_1.jpg,DJI_0451,train,1,128.0,280.0,35840.51,2.1875,1,128.0,uncertain,touches_boundary
+images\train\DJI_0451_1_2.jpg,DJI_0451,train,1,147.0,280.0,41159.73,1.9048,1,147.0,uncertain,touches_boundary
+images\train\DJI_0617_0_1.jpg,DJI_0617,train,1,15.0,89.0,1335.22,5.9322,1,15.0,uncertain,touches_boundary; short_side<=16px
+images\train\DJI_0617_0_2.jpg,DJI_0617,train,2,80.0,89.0,7119.73,1.1125,1,80.0,uncertain,touches_boundary
+images\train\DJI_0622_1_2.jpg,DJI_0622,train,2,61.0,32.0,1952.05,1.9062,1,32.0,uncertain,touches_boundary
+images\train\DJI_0625_0_2.jpg,DJI_0625,train,1,69.0,64.0,4416.02,1.0781,1,64.0,uncertain,touches_boundary
+images\train\DJI_0628_1_1.jpg,DJI_0628,train,2,80.0,46.0,3679.94,1.7392,1,46.0,uncertain,touches_boundary
+images\train\DJI_0686_0_2.jpg,DJI_0686,train,3,41.0,26.0,1066.04,1.5769,1,26.0,uncertain,touches_boundary
+images\train\DJI_0686_0_3.jpg,DJI_0686,train,1,36.0,26.0,936.01,1.3846,1,26.0,uncertain,touches_boundary
+images\train\DJI_0686_1_2.jpg,DJI_0686,train,1,41.0,47.0,1927.03,1.1463,1,41.0,uncertain,touches_boundary
+images\train\DJI_0686_1_3.jpg,DJI_0686,train,2,36.0,47.0,1691.97,1.3056,1,36.0,uncertain,touches_boundary
+images\train\DJI_0689_0_1.jpg,DJI_0689,train,1,47.0,130.0,6110.2,2.7659,1,47.0,uncertain,touches_boundary
+images\train\DJI_0689_0_2.jpg,DJI_0689,train,2,60.0,130.0,7800.03,2.1667,1,60.0,uncertain,touches_boundary
+images\train\DJI_0689_1_2.jpg,DJI_0689,train,1,114.0,130.0,14820.1,1.1403,1,114.0,uncertain,touches_boundary
+images\train\DJI_0690_0_2.jpg,DJI_0690,train,2,158.0,131.0,20697.77,1.2061,1,131.0,uncertain,touches_boundary
+images\train\DJI_0690_1_2.jpg,DJI_0690,train,1,158.0,34.0,5371.95,4.647,1,34.0,uncertain,touches_boundary
+images\train\DJI_0691_0_2.jpg,DJI_0691,train,2,121.0,111.0,13431.29,1.0901,1,111.0,uncertain,touches_boundary
+images\train\DJI_0692_1_2.jpg,DJI_0692,train,1,100.0,113.0,11299.68,1.13,1,100.0,uncertain,touches_boundary
+images\train\DJI_0696_1_1.jpg,DJI_0696,train,1,58.0,453.0,26274.13,7.8103,1,58.0,uncertain,touches_boundary
+images\train\DJI_0696_1_2.jpg,DJI_0696,train,2,336.0,453.0,152208.18,1.3482,1,336.0,uncertain,touches_boundary
+images\train\DJI_0700_1_3.jpg,DJI_0700,train,1,386.0,289.0,111553.74,1.3356,1,289.0,uncertain,touches_boundary
+images\train\DJI_0713_0_1.jpg,DJI_0713,train,2,84.0,59.0,4955.88,1.4238,1,59.0,uncertain,touches_boundary
+images\train\DJI_0713_1_1.jpg,DJI_0713,train,3,84.0,10.0,840.12,8.3988,1,10.0,invalid,out_of_bounds
+images\train\DJI_0745_0_0.jpg,DJI_0745,train,1,343.0,292.0,100155.63,1.1747,1,292.0,uncertain,touches_boundary
+images\train\DJI_0745_1_0.jpg,DJI_0745,train,1,343.0,81.0,27783.08,4.2345,1,81.0,uncertain,touches_boundary
+images\train\DJI_0748_0_1.jpg,DJI_0748,train,1,320.0,97.0,31039.49,3.299,1,97.0,uncertain,touches_boundary
+images\train\DJI_0748_1_1.jpg,DJI_0748,train,1,320.0,239.0,76480.51,1.3389,1,239.0,uncertain,touches_boundary
+images\train\DJI_0749_1_1.jpg,DJI_0749,train,1,288.0,300.0,86399.16,1.0417,1,288.0,uncertain,touches_boundary
+images\train\DJI_0750_0_1.jpg,DJI_0750,train,1,337.0,297.0,100089.42,1.1347,1,297.0,uncertain,touches_boundary
+images\train\DJI_0750_1_1.jpg,DJI_0750,train,1,337.0,92.0,31004.22,3.663,1,92.0,uncertain,touches_boundary
+images\train\DJI_0751_0_1.jpg,DJI_0751,train,1,90.0,422.0,37981.18,4.6888,1,90.0,uncertain,touches_boundary
+images\train\DJI_0751_0_2.jpg,DJI_0751,train,1,294.0,422.0,124067.9,1.4354,1,294.0,uncertain,touches_boundary
+images\train\DJI_0754_1_4.jpg,DJI_0754,train,1,51.0,301.0,15351.75,5.9017,1,51.0,uncertain,touches_boundary
+images\train\DJI_0756_1_1.jpg,DJI_0756,train,1,83.0,263.0,21828.47,3.1687,1,83.0,uncertain,touches_boundary
+images\train\DJI_0756_1_2.jpg,DJI_0756,train,1,253.0,263.0,66539.48,1.0395,1,253.0,uncertain,touches_boundary
+images\train\DJI_0757_1_1.jpg,DJI_0757,train,1,42.0,278.0,11675.85,6.6192,1,42.0,uncertain,touches_boundary
+images\train\DJI_0757_1_2.jpg,DJI_0757,train,1,304.0,278.0,84512.76,1.0935,1,278.0,uncertain,touches_boundary
+images\train\DJI_0758_1_1.jpg,DJI_0758,train,1,121.0,289.0,34969.08,2.3884,1,121.0,uncertain,touches_boundary
+images\train\DJI_0758_1_2.jpg,DJI_0758,train,1,183.0,289.0,52885.84,1.5793,1,183.0,uncertain,touches_boundary
+images\val\DJI_0033_0_2.jpg,DJI_0033,val,1,47.0,258.0,12126.72,5.4891,1,47.0,uncertain,touches_boundary
+images\val\DJI_0033_1_2.jpg,DJI_0033,val,5,15.0,17.0,255.02,1.1333,0,15.0,uncertain,short_side<=16px
+images\val\DJI_0033_1_2.jpg,DJI_0033,val,5,17.0,15.0,255.05,1.1333,0,15.0,uncertain,short_side<=16px
+images\val\DJI_0059_1_2.jpg,DJI_0059,val,1,27.0,87.0,2348.81,3.2225,1,27.0,uncertain,touches_boundary
+images\val\DJI_0059_1_3.jpg,DJI_0059,val,2,66.0,87.0,5742.17,1.3181,1,66.0,invalid,out_of_bounds
+images\val\DJI_0096_1_3.jpg,DJI_0096,val,1,23.0,23.0,529.0,1.0,1,23.0,uncertain,touches_boundary
+images\val\DJI_0106_1_2.jpg,DJI_0106,val,2,28.0,21.0,587.98,1.3334,1,21.0,uncertain,touches_boundary
+images\val\DJI_0110_0_1.jpg,DJI_0110,val,2,14.0,36.0,504.07,2.571,1,14.0,uncertain,touches_boundary; short_side<=16px
+images\val\DJI_0110_0_2.jpg,DJI_0110,val,1,3.0,36.0,107.9,12.0109,1,3.0,uncertain,touches_boundary; extreme_aspect_ratio=12.01; short_side<=16px
+images\val\DJI_0119_0_3.jpg,DJI_0119,val,1,16.0,44.0,703.91,2.7504,0,16.0,uncertain,short_side<=16px
+images\val\DJI_0121_0_3.jpg,DJI_0121,val,2,15.0,41.0,615.04,2.7333,0,15.0,uncertain,short_side<=16px
+images\val\DJI_0121_1_3.jpg,DJI_0121,val,2,30.0,10.0,300.02,3.0,1,10.0,uncertain,touches_boundary; short_side<=16px
+images\val\DJI_0236_0_2.jpg,DJI_0236,val,1,40.0,1022.0,40881.57,25.549,1,40.0,uncertain,touches_boundary; extreme_aspect_ratio=25.55
+images\val\DJI_0236_1_2.jpg,DJI_0236,val,1,40.0,423.0,16920.65,10.5746,1,40.0,uncertain,touches_boundary; extreme_aspect_ratio=10.57
+images\val\DJI_0238_0_2.jpg,DJI_0238,val,1,64.0,216.0,13823.81,3.3751,1,64.0,uncertain,touches_boundary
+images\val\DJI_0238_1_2.jpg,DJI_0238,val,1,64.0,1023.0,65470.92,15.9846,1,64.0,uncertain,touches_boundary; extreme_aspect_ratio=15.98
+images\val\DJI_0331_0_2.jpg,DJI_0331,val,1,155.0,163.0,25264.86,1.0516,1,155.0,uncertain,touches_boundary
+images\val\DJI_0331_1_2.jpg,DJI_0331,val,1,155.0,11.0,1705.29,14.0885,1,11.0,uncertain,touches_boundary; extreme_aspect_ratio=14.09; short_side<=16px
+images\val\DJI_0426_1_4.jpg,DJI_0426,val,1,124.0,145.0,17980.37,1.1694,1,124.0,uncertain,touches_boundary
+images\val\DJI_0430_1_0.jpg,DJI_0430,val,1,68.0,155.0,10540.18,2.2794,1,68.0,uncertain,touches_boundary
+images\val\DJI_0430_1_1.jpg,DJI_0430,val,1,176.0,155.0,27280.31,1.1355,1,155.0,uncertain,touches_boundary
+images\val\DJI_0435_1_3.jpg,DJI_0435,val,1,10.0,157.0,1570.21,15.6977,1,10.0,uncertain,touches_boundary; extreme_aspect_ratio=15.70; short_side<=16px
+images\val\DJI_0435_1_4.jpg,DJI_0435,val,1,224.0,157.0,35167.7,1.4268,1,157.0,uncertain,touches_boundary
+images\val\DJI_0452_1_2.jpg,DJI_0452,val,1,12.0,199.0,2388.65,16.5787,1,12.0,uncertain,touches_boundary; extreme_aspect_ratio=16.58; short_side<=16px
+images\val\DJI_0452_1_3.jpg,DJI_0452,val,1,243.0,199.0,48356.22,1.2211,1,199.0,uncertain,touches_boundary
+images\val\DJI_0697_1_2.jpg,DJI_0697,val,1,405.0,400.0,162000.9,1.0125,1,400.0,uncertain,touches_boundary
+images\val\DJI_0701_0_2.jpg,DJI_0701,val,1,53.0,46.0,2437.96,1.1522,1,46.0,uncertain,touches_boundary
+images\val\DJI_0708_0_2.jpg,DJI_0708,val,1,304.0,104.0,31615.64,2.9231,1,104.0,uncertain,touches_boundary
+images\val\DJI_0708_1_2.jpg,DJI_0708,val,2,304.0,249.0,75696.55,1.2209,1,249.0,uncertain,touches_boundary
+images\val\DJI_0711_1_3.jpg,DJI_0711,val,3,109.0,1.0,109.16,108.8405,1,1.0,uncertain,touches_boundary; extreme_aspect_ratio=108.84; short_side<=16px
+images\val\DJI_0746_0_0.jpg,DJI_0746,val,1,315.0,181.0,57015.03,1.7403,1,181.0,uncertain,touches_boundary
+images\val\DJI_0746_1_0.jpg,DJI_0746,val,1,315.0,239.0,75284.81,1.318,1,239.0,uncertain,touches_boundary
+images\test\DJI_0026_0_1.jpg,DJI_0026,test,1,68.0,143.0,9724.08,2.1029,1,68.0,uncertain,touches_boundary
+images\test\DJI_0029_0_2.jpg,DJI_0029,test,1,48.0,197.0,9456.01,4.1042,1,48.0,uncertain,touches_boundary
+images\test\DJI_0029_1_2.jpg,DJI_0029,test,3,25.0,26.0,650.01,1.0399,1,25.0,uncertain,touches_boundary
+images\test\DJI_0036_1_2.jpg,DJI_0036,test,2,54.0,64.0,3456.03,1.1852,1,54.0,uncertain,touches_boundary
+images\test\DJI_0038_1_1.jpg,DJI_0038,test,1,75.0,64.0,4800.0,1.1718,1,64.0,invalid,out_of_bounds
+images\test\DJI_0102_1_3.jpg,DJI_0102,test,1,24.0,24.0,575.95,1.0001,1,24.0,uncertain,touches_boundary
+images\test\DJI_0112_0_1.jpg,DJI_0112,test,1,14.0,39.0,546.07,2.7852,1,14.0,uncertain,touches_boundary; short_side<=16px
+images\test\DJI_0169_1_2.jpg,DJI_0169,test,1,14.0,19.0,266.03,1.3569,0,14.0,uncertain,short_side<=16px
+images\test\DJI_0174_0_2.jpg,DJI_0174,test,2,26.0,9.0,234.01,2.8884,1,9.0,uncertain,touches_boundary; short_side<=16px
+images\test\DJI_0174_1_2.jpg,DJI_0174,test,1,13.0,17.0,221.0,1.3078,0,13.0,uncertain,short_side<=16px
+images\test\DJI_0203_0_2.jpg,DJI_0203,test,2,17.0,16.0,272.01,1.0627,0,16.0,uncertain,short_side<=16px
+images\test\DJI_0203_0_2.jpg,DJI_0203,test,2,13.0,16.0,207.98,1.2307,0,13.0,uncertain,short_side<=16px
+images\test\DJI_0413_1_3.jpg,DJI_0413,test,1,227.0,234.0,53117.92,1.0309,1,227.0,invalid,out_of_bounds
+images\test\DJI_0616_1_1.jpg,DJI_0616,test,2,124.0,114.0,14136.37,1.0877,1,114.0,uncertain,touches_boundary
+images\test\DJI_0687_1_2.jpg,DJI_0687,test,1,44.0,77.0,3387.74,1.7502,1,44.0,uncertain,touches_boundary
+images\test\DJI_0687_1_3.jpg,DJI_0687,test,2,55.0,33.0,1815.04,1.6668,1,33.0,uncertain,touches_boundary
+images\test\DJI_0694_1_3.jpg,DJI_0694,test,2,122.0,97.0,11833.87,1.2577,1,97.0,uncertain,touches_boundary
+images\test\DJI_0699_1_2.jpg,DJI_0699,test,2,57.0,57.0,3249.05,1.0,1,57.0,uncertain,touches_boundary
+images\test\DJI_0699_1_2.jpg,DJI_0699,test,2,293.0,466.0,136538.23,1.5904,1,293.0,uncertain,touches_boundary
+images\test\DJI_0710_0_2.jpg,DJI_0710,test,2,54.0,57.0,3078.15,1.0555,1,54.0,invalid,out_of_bounds
+images\test\DJI_0747_1_2.jpg,DJI_0747,test,1,152.0,360.0,54720.48,2.3684,1,152.0,uncertain,touches_boundary
