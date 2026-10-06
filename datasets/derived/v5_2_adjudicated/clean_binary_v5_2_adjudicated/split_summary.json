@@ -1,0 +1,163 @@
+{
+  "version": "v5.2-adjudicated-idval-oodtest",
+  "source": "C:\\Users\\ASUS\\Documents\\Codex\\2026-08-20\\v4-zip\\work\\v4_inspection\\dataset\\clean_binary_v5_scene_clean",
+  "total_images": 3040,
+  "global_label_rule": {
+    "remove_if": "touches tile boundary AND visible short side below threshold",
+    "boundary_short_side_px": 16.0,
+    "removed_boxes": 26
+  },
+  "roles": {
+    "train": {
+      "images": 1950,
+      "positives": 375,
+      "backgrounds": 1575,
+      "boxes": 496,
+      "parents": 195
+    },
+    "id_val": {
+      "images": 380,
+      "positives": 49,
+      "backgrounds": 331,
+      "boxes": 58,
+      "parents": 38
+    },
+    "ood_test": {
+      "images": 710,
+      "positives": 138,
+      "backgrounds": 572,
+      "boxes": 189,
+      "parents": 71
+    }
+  },
+  "groups": [
+    {
+      "scene_group": "scene_01_DJI_0004-0061",
+      "role": "train",
+      "images": 510,
+      "positives": 117,
+      "backgrounds": 393,
+      "boxes": 157,
+      "parents": 51
+    },
+    {
+      "scene_group": "scene_02_DJI_0088-0134",
+      "role": "train",
+      "images": 460,
+      "positives": 89,
+      "backgrounds": 371,
+      "boxes": 124,
+      "parents": 46
+    },
+    {
+      "scene_group": "scene_03_DJI_0156-0219",
+      "role": "train",
+      "images": 590,
+      "positives": 107,
+      "backgrounds": 483,
+      "boxes": 153,
+      "parents": 59
+    },
+    {
+      "scene_group": "scene_04_DJI_0234-0251",
+      "role": "ood_test",
+      "images": 140,
+      "positives": 21,
+      "backgrounds": 119,
+      "boxes": 22,
+      "parents": 14
+    },
+    {
+      "scene_group": "scene_05_DJI_0327-0339",
+      "role": "id_val",
+      "images": 130,
+      "positives": 22,
+      "backgrounds": 108,
+      "boxes": 22,
+      "parents": 13
+    },
+    {
+      "scene_group": "scene_06_DJI_0357-0361",
+      "role": "id_val",
+      "images": 50,
+      "positives": 5,
+      "backgrounds": 45,
+      "boxes": 5,
+      "parents": 5
+    },
+    {
+      "scene_group": "scene_07_DJI_0375-0396",
+      "role": "id_val",
+      "images": 140,
+      "positives": 16,
+      "backgrounds": 124,
+      "boxes": 23,
+      "parents": 14
+    },
+    {
+      "scene_group": "scene_08_DJI_0408-0453",
+      "role": "train",
+      "images": 390,
+      "positives": 62,
+      "backgrounds": 328,
+      "boxes": 62,
+      "parents": 39
+    },
+    {
+      "scene_group": "scene_09_DJI_0615-0628",
+      "role": "ood_test",
+      "images": 140,
+      "positives": 24,
+      "backgrounds": 116,
+      "boxes": 42,
+      "parents": 14
+    },
+    {
+      "scene_group": "scene_10_DJI_0685-0713",
+      "role": "ood_test",
+      "images": 290,
+      "positives": 67,
+      "backgrounds": 223,
+      "boxes": 99,
+      "parents": 29
+    },
+    {
+      "scene_group": "scene_11_DJI_0745-0758",
+      "role": "ood_test",
+      "images": 140,
+      "positives": 26,
+      "backgrounds": 114,
+      "boxes": 26,
+      "parents": 14
+    },
+    {
+      "scene_group": "scene_12_DJI_0975-0979",
+      "role": "id_val",
+      "images": 50,
+      "positives": 5,
+      "backgrounds": 45,
+      "boxes": 5,
+      "parents": 5
+    },
+    {
+      "scene_group": "scene_13_DJI_0995-0995",
+      "role": "id_val",
+      "images": 10,
+      "positives": 1,
+      "backgrounds": 9,
+      "boxes": 3,
+      "parents": 1
+    }
+  ],
+  "review": {
+    "boxes_adjudicated": 23,
+    "keep": 22,
+    "remove": 1,
+    "unresolved": 0,
+    "review_set_images": 0
+  },
+  "evaluation_firewall": {
+    "val_role": "ID validation for best checkpoint and early stopping",
+    "test_role": "frozen OOD test; do not use for model selection"
+  }
+}

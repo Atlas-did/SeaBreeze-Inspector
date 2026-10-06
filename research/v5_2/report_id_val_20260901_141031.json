@@ -1,0 +1,66 @@
+{
+  "meta": {
+    "split": "id_val",
+    "model_path": "D:\\SeaBreeze Inspector\\SeaBreeze Inspector\\offshore-wind-uav-arm\\data\\weights\\seabreeze_v3.pt",
+    "model_sha256": "4b83f1f1739202ad099db83c6f35067c17bc2c3d004eb439ec0dba9390575b82",
+    "diag_conf": 0.25,
+    "diag_iou": 0.5,
+    "images": 12,
+    "limit": 12,
+    "finished_utc": "2026-09-01T06:10:31Z",
+    "numbers_are_citable": false
+  },
+  "headline_val": {},
+  "scene_slices": {
+    "DJI_0014": {
+      "tp": 0,
+      "fp": 1,
+      "fn": 4,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    "DJI_0018": {
+      "tp": 0,
+      "fp": 2,
+      "fn": 0,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    }
+  },
+  "short_side_recall": {
+    "<=32": {
+      "tp": 0,
+      "fp": 0,
+      "fn": 3,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    "<=64": {
+      "tp": 0,
+      "fp": 0,
+      "fn": 1,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    }
+  },
+  "aspect_ratio_recall": {
+    "<=5": {
+      "tp": 0,
+      "fp": 0,
+      "fn": 4,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    }
+  },
+  "false_positives_total": 3,
+  "verdict_hints": {
+    "ood_recall_not_near_zero": false,
+    "scene_spread_detected": false,
+    "note": "§4.第三步 three-way judgement — read scene_slices, short_slices, aspect_slices together; a single near-zero scene block with healthy others = appearance domain shift; uniform collapse = labels/coverage/resolution."
+  }
+}

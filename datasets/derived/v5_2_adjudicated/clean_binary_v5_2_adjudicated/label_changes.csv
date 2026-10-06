@@ -1,0 +1,27 @@
+﻿image,source_split,v5_2_role,scene_group,line_number,original_line,width_px,height_px,short_side_px,touches_boundary,reason
+DJI_0331_1_2.jpg,test,id_val,scene_05_DJI_0327-0339,1,0 0.829590 0.005372 0.151367 0.010744,154.999808,11.001856,11.001856,True,clipped_boundary_fragment_short_side<16px
+DJI_0617_0_1.jpg,test,ood_test,scene_09_DJI_0615-0628,1,0 0.991698 0.945800 0.014651 0.086913,15.002624,88.998912,15.002624,True,clipped_boundary_fragment_short_side<16px
+DJI_0008_1_1.jpg,train,train,scene_01_DJI_0004-0061,1,0 0.812989 0.995606 0.041993 0.006835,43.000832,6.99904,6.99904,True,clipped_boundary_fragment_short_side<16px
+DJI_0010_0_4.jpg,train,train,scene_01_DJI_0004-0061,1,0 0.992676 0.231445 0.012695 0.019531,12.99968,19.999744,12.99968,True,clipped_boundary_fragment_short_side<16px
+DJI_0024_0_2.jpg,train,train,scene_01_DJI_0004-0061,2,0 0.513182 0.992188 0.032227 0.013671,33.000448,13.999104,13.999104,True,clipped_boundary_fragment_short_side<16px
+DJI_0024_1_2.jpg,train,train,scene_01_DJI_0004-0061,1,0 0.513182 0.006836 0.032227 0.013672,33.000448,14.000128,14.000128,True,clipped_boundary_fragment_short_side<16px
+DJI_0027_0_1.jpg,train,train,scene_01_DJI_0004-0061,1,0 0.996581 0.067382 0.004885 0.132812,5.00224,135.999488,5.00224,True,clipped_boundary_fragment_short_side<16px
+DJI_0035_1_2.jpg,train,train,scene_01_DJI_0004-0061,3,0 0.229490 0.996095 0.039064 0.005858,40.001536,5.998592,5.998592,True,clipped_boundary_fragment_short_side<16px
+DJI_0046_1_0.jpg,train,train,scene_01_DJI_0004-0061,1,0 0.134764 0.992675 0.113283 0.012697,116.001792,13.001728,13.001728,True,clipped_boundary_fragment_short_side<16px
+DJI_0051_0_3.jpg,train,train,scene_01_DJI_0004-0061,2,0 0.006837 0.900391 0.013673 0.085939,14.001152,88.001536,14.001152,True,clipped_boundary_fragment_short_side<16px
+DJI_0056_1_3.jpg,train,train,scene_01_DJI_0004-0061,1,0 0.586914 0.002929 0.050779 0.005858,51.997696,5.998592,5.998592,True,clipped_boundary_fragment_short_side<16px
+DJI_0103_0_1.jpg,train,train,scene_02_DJI_0088-0134,1,0 0.003907 0.374513 0.007815 0.061523,8.00256,62.999552,8.00256,True,clipped_boundary_fragment_short_side<16px
+DJI_0110_0_1.jpg,train,train,scene_02_DJI_0088-0134,1,0 0.992187 0.575194 0.013674 0.035156,14.002176,35.999744,14.002176,True,clipped_boundary_fragment_short_side<16px
+DJI_0121_1_3.jpg,train,train,scene_02_DJI_0088-0134,2,0 0.110353 0.994141 0.029298 0.009766,30.001152,10.000384,10.000384,True,clipped_boundary_fragment_short_side<16px
+DJI_0123_1_3.jpg,train,train,scene_02_DJI_0088-0134,1,0 0.670899 0.003418 0.042967 0.006836,43.998208,7.000064,7.000064,True,clipped_boundary_fragment_short_side<16px
+DJI_0164_1_2.jpg,train,train,scene_03_DJI_0156-0219,1,0 0.535643 0.009277 0.014649 0.018555,15.000576,19.00032,15.000576,True,clipped_boundary_fragment_short_side<16px
+DJI_0174_0_2.jpg,train,train,scene_03_DJI_0156-0219,2,0 0.930663 0.995605 0.025389 0.008790,25.998336,9.00096,9.00096,True,clipped_boundary_fragment_short_side<16px
+DJI_0200_0_3.jpg,train,train,scene_03_DJI_0156-0219,1,0 0.006837 0.987793 0.013673 0.022460,14.001152,22.99904,14.001152,True,clipped_boundary_fragment_short_side<16px
+DJI_0200_1_3.jpg,train,train,scene_03_DJI_0156-0219,1,0 0.006837 0.047364 0.013673 0.094728,14.001152,97.001472,14.001152,True,clipped_boundary_fragment_short_side<16px
+DJI_0393_0_4.jpg,train,id_val,scene_07_DJI_0375-0396,2,0 0.997069 0.905763 0.003909 0.092775,4.002816,95.0016,4.002816,True,clipped_boundary_fragment_short_side<16px
+DJI_0429_1_3.jpg,train,train,scene_08_DJI_0408-0453,1,0 0.006348 0.345216 0.012696 0.151368,13.000704,155.000832,13.000704,True,clipped_boundary_fragment_short_side<16px
+DJI_0435_1_3.jpg,train,train,scene_08_DJI_0408-0453,1,0 0.994140 0.922364 0.009767 0.153319,10.001408,156.998656,10.001408,True,clipped_boundary_fragment_short_side<16px
+DJI_0446_1_3.jpg,train,train,scene_08_DJI_0408-0453,1,0 0.994141 0.647950 0.009764 0.278321,9.998336,285.000704,9.998336,True,clipped_boundary_fragment_short_side<16px
+DJI_0452_1_2.jpg,train,train,scene_08_DJI_0408-0453,1,0 0.993163 0.615724 0.011722 0.194335,12.003328,198.99904,12.003328,True,clipped_boundary_fragment_short_side<16px
+DJI_0249_0_4.jpg,val,ood_test,scene_04_DJI_0234-0251,1,0 0.004883 0.184569 0.009766 0.146484,10.000384,149.999616,10.000384,True,clipped_boundary_fragment_short_side<16px
+DJI_0713_1_1.jpg,val,ood_test,scene_10_DJI_0685-0713,1,0 0.379885 0.004883 0.082031 0.009767,83.999744,10.001408,10.001408,True,clipped_boundary_fragment_short_side<16px

@@ -1,0 +1,13 @@
+{
+  "slot": "final",
+  "finished_utc": "2026-09-01T06:35:16Z",
+  "model_path": "D:\\SeaBreeze Inspector\\SeaBreeze Inspector\\offshore-wind-uav-arm\\runs\\detect\\v5_2_yolo11s_1024_seed42\\weights\\best.pt",
+  "model_sha256": "7c3e1e39a8150d512ddc875806ee994fef9da65d0774cd739b25dcd8fb7531c8",
+  "report": "D:\\SeaBreeze Inspector\\SeaBreeze Inspector\\offshore-wind-uav-arm\\research\\v5_2\\report_ood_test_20260901_143516.json",
+  "headline": {
+    "precision": 0.2167,
+    "recall": 0.0688,
+    "mAP50": 0.0365,
+    "mAP50-95": 0.0099
+  }
+}

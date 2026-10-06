@@ -1,0 +1,20 @@
+{
+  "version": "v5.2-adjudicated-balanced",
+  "seed": 0,
+  "unique_train_images": 1950,
+  "unique_positive_images": 375,
+  "unique_background_images": 1575,
+  "train_boxes": 496,
+  "effective_train_entries": 2363,
+  "effective_positive_entries": 788,
+  "effective_background_entries": 1575,
+  "effective_background_per_positive": 1.998730964467005,
+  "positive_repeat_count_distribution": {
+    "2": 337,
+    "3": 38
+  },
+  "batch8_all_background_probability_original": 0.1811204856889364,
+  "batch8_all_background_probability_effective": 0.03895244221227063,
+  "id_val_unchanged": true,
+  "ood_test_unchanged_and_frozen": true
+}

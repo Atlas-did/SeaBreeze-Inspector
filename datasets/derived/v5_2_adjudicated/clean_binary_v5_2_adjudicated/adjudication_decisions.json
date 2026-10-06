@@ -1,0 +1,34 @@
+{
+  "protocol": {
+    "version": "v5.2-adjudicated",
+    "review_scope": "All 23 boxes in v5 scene DJI_0234-0251 plus a global clipped-fragment rule",
+    "global_remove_rule": "touches tile boundary and visible short side is below 16 pixels",
+    "green_marker_policy": "Keep: green markers are labeled consistently as positive targets in the training set",
+    "leading_edge_policy": "Keep: elongated gray leading-edge regions persist across adjacent frames and match existing defect semantics"
+  },
+  "boxes": [
+    {"box_id": 1, "image": "DJI_0234_0_2.jpg", "decision": "keep", "reason": "Visible elongated gray leading-edge damage; consistent across adjacent frames."},
+    {"box_id": 2, "image": "DJI_0234_1_2.jpg", "decision": "keep", "reason": "Localized visible continuation on the blade; sufficient 22x20 px extent."},
+    {"box_id": 3, "image": "DJI_0235_0_2.jpg", "decision": "keep", "reason": "Continuous leading-edge damage spans the tile; not an empty strip."},
+    {"box_id": 4, "image": "DJI_0235_1_2.jpg", "decision": "keep", "reason": "Visible boundary continuation of the same leading-edge region; sufficient short side."},
+    {"box_id": 5, "image": "DJI_0236_0_2.jpg", "decision": "keep", "reason": "Continuous leading-edge damage spans the tile and persists temporally."},
+    {"box_id": 6, "image": "DJI_0236_1_2.jpg", "decision": "keep", "reason": "Substantial visible continuation of the elongated leading-edge region."},
+    {"box_id": 7, "image": "DJI_0237_0_3.jpg", "decision": "keep", "reason": "Wide elongated leading-edge damage is visible; temporal evidence supports a real region."},
+    {"box_id": 8, "image": "DJI_0237_1_3.jpg", "decision": "keep", "reason": "Substantial lower-tile continuation of the same visible damaged edge."},
+    {"box_id": 9, "image": "DJI_0238_0_2.jpg", "decision": "keep", "reason": "Visible elongated leading-edge region with adequate width."},
+    {"box_id": 10, "image": "DJI_0238_1_2.jpg", "decision": "keep", "reason": "Full-height leading-edge region remains visibly distinct and temporally consistent."},
+    {"box_id": 11, "image": "DJI_0243_1_2.jpg", "decision": "keep", "reason": "Localized oval surface mark is clearly visible inside the box."},
+    {"box_id": 12, "image": "DJI_0244_1_2.jpg", "decision": "keep", "reason": "Localized oval surface mark is clearly visible inside the box."},
+    {"box_id": 13, "image": "DJI_0245_1_2.jpg", "decision": "keep", "reason": "Localized oval surface mark is clearly visible inside the box."},
+    {"box_id": 14, "image": "DJI_0247_1_2.jpg", "decision": "keep", "reason": "Green marker target; the same target semantics occurs in train annotations."},
+    {"box_id": 15, "image": "DJI_0247_1_2.jpg", "decision": "keep", "reason": "Localized oval surface mark is visible and well contained."},
+    {"box_id": 16, "image": "DJI_0248_0_3.jpg", "decision": "keep", "reason": "Grouped local surface marks are visible; grouping matches existing label practice."},
+    {"box_id": 17, "image": "DJI_0248_1_2.jpg", "decision": "keep", "reason": "Green marker targets are clearly visible and consistent with train semantics."},
+    {"box_id": 18, "image": "DJI_0249_0_3.jpg", "decision": "keep", "reason": "Localized oval surface mark is visible; boundary contact does not erase the target."},
+    {"box_id": 19, "image": "DJI_0249_0_4.jpg", "decision": "remove", "reason": "Only a 10-pixel-wide clipped sliver remains at the tile edge; not independently recognizable."},
+    {"box_id": 20, "image": "DJI_0249_1_3.jpg", "decision": "keep", "reason": "Green marker targets are clearly visible and consistent with train semantics."},
+    {"box_id": 21, "image": "DJI_0250_0_3.jpg", "decision": "keep", "reason": "Green marker targets are clearly visible and sufficiently contained."},
+    {"box_id": 22, "image": "DJI_0251_0_3.jpg", "decision": "keep", "reason": "Substantial visible part of the green marker remains despite boundary contact."},
+    {"box_id": 23, "image": "DJI_0251_0_4.jpg", "decision": "keep", "reason": "Substantial visible part of the green marker remains despite boundary contact."}
+  ]
+}

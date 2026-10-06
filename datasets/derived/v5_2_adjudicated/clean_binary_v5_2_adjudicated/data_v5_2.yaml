@@ -1,0 +1,8 @@
+# v5.2: val is ID validation; test is frozen OOD and is not used for model selection.
+path: .
+train: train_balanced_v5_2.txt
+val: images/val
+test: images/test
+nc: 1
+names:
+- defect
