@@ -22,7 +22,8 @@ SimDroneAdapter.get_commanded_velocity() (mc 控制器输出经 set_velocity 下
 import time
 import numpy as np
 
-from backend.utils.units import m_to_cm, cm_to_m, mps_to_cmps, mps2_to_cmps2
+from backend.utils.units import (m_to_cm, cm_to_m, mps_to_cmps, mps2_to_cmps2,
+                                 cmps2_to_mps2)
 from backend.simulation.drone_adapter import SimDroneAdapter
 from backend.simulation.transport_model import (
     ActuatorLag,
@@ -83,7 +84,8 @@ class SimRuntime:
                  uplink_latency_s: float = 0.0,
                  uplink_drop_rate: float = 0.0,
                  uplink_loss_model: str = "iid",
-                 uplink_mean_burst_len: float = 1.0):
+                 uplink_mean_burst_len: float = 1.0,
+                 cascade_feedforward: bool = False):
         """velocity_command_mode: True = 物理由 adapter 的速度指令驱动 (真机同源链路)。
 
         默认 False (硬要求): 论文已发表的高度/悬停精度数字是在旧的
@@ -104,6 +106,10 @@ class SimRuntime:
         self.arm = arm
         self.sensor = sensor
         self.velocity_command_mode = bool(velocity_command_mode)
+        # P0-1: 级联环是否消费 EKF 的扰动估计 d̂ 做前馈抵消。
+        # 默认 False —— 保持默认路径逐位不变（已发表数字来自默认路径，
+        # 见 test_transport_model.py::test_default_path_matches_pre_change_golden）。
+        self._cascade_ff = bool(cascade_feedforward)
 
         # ---- Phase 3 传输层 (默认全 0 = 不创建对象, 对旧数值零影响) ----
         self._transport_enabled = (sensor_latency_s > 0.0 or sensor_drop_rate > 0.0)
@@ -216,6 +222,21 @@ class SimRuntime:
                 v_des[2] = np.clip(v_des[2], -MAX_VSPEED, MAX_VSPEED)
                 # 速度环: 速度误差 → 期望加速度 (限幅)
                 a_des = np.clip((v_des - vel) / VEL_TAU, -MAX_ACCEL, MAX_ACCEL)
+                # ---- P0-1 修复 (2026-10-06 评审): 前馈可真正接通 ----
+                # 此前 mc 的 PID+前馈输出会被 mc.update_with_external_data 每帧
+                # 无条件覆盖 (main.py: self.current_pos = ekf_state["position"])，
+                # 物理完全由本函数这个级联环驱动，而级联环不知道 d̂ 存在 ——
+                # 于是"开/关前馈"轨迹逐位相同（评审实测 A==B==C==D）。
+                # 现在级联环可吃掉 EKF 的扰动估计 d̂ 做前馈抵消（Kff = -1）。
+                # 注意：默认关闭（cascade_feedforward=False），因为本仓库有一条硬要求
+                # —— 默认路径必须逐位不变（已发表的高度/悬停数字来自默认路径），
+                # 见 tests/test_transport_model.py::test_default_path_matches_pre_change_golden。
+                # 需要演示/验证前馈时显式传 cascade_feedforward=True。
+                if (self._cascade_ff
+                        and getattr(self.mc.controller, "enable_ff", False)):
+                    d_hat_cmps2 = self.mc.ekf.get_disturbance()   # cm/s²
+                    a_des = np.clip(a_des - cmps2_to_mps2(d_hat_cmps2),
+                                    -MAX_ACCEL, MAX_ACCEL)
                 # 加速度指令 → 推力 + 期望倾角 (水平分力靠机身倾斜产生)
                 az_cmd = a_des[2] + self.quad.g
                 thrust = self.quad.mass * max(0.0, az_cmd)

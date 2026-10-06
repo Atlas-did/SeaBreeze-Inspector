@@ -1,4 +1,4 @@
-# Offshore Wind Turbine UAV-Arm Cooperative Inspection System
+﻿# Offshore Wind Turbine UAV-Arm Cooperative Inspection System
 
 > An open-source UAV + robotic arm cooperative system for offshore wind turbine inspection.
 > Built with DJI Tello, Arduino, and Python.
@@ -11,10 +11,10 @@
 
 This project proposes an intelligent inspection solution combining a UAV with a 3-DOF lightweight robotic arm. Using a DJI Tello drone, it achieves autonomous flight, stable hovering, and defect identification on wind turbine towers through:
 
-- **Disturbance Observer (12-state EKF)** — estimates and compensates for wind disturbances
-- **Feedforward PID Controller** — disturbance-aware position control
-- **RRT\* Path Planning** — 3D obstacle-aware trajectory generation
-- **Defect Detection (YOLO11s training line)** — real-time crack/corrosion/damage detection
+- **Disturbance Observer (12-state EKF)** 鈥?estimates and compensates for wind disturbances
+- **Feedforward PID Controller** 鈥?disturbance-aware position control
+- **RRT\* Path Planning** 鈥?3D obstacle-aware trajectory generation
+- **Defect Detection (YOLO11s training line)** 鈥?real-time crack/corrosion/damage detection
 
 ## Tech Stack
 
@@ -28,12 +28,12 @@ This project proposes an intelligent inspection solution combining a UAV with a 
 | Frontend | Tkinter dashboard (monitor-only) + Web 3D (main demo) |
 | Language | Python 3.10+ |
 
-> **模型状态（诚实标注，勿据此宣称可复现）**：训练线是 **YOLO11s**
-> （`backend/vision/train.py` 的 `DEFAULT_MODEL`）；而 `config/yolo_config.yaml`
-> 当前指向的是**历史权重** `seabreeze_v3.pt`，其训练/评估 provenance 尚未登记
-> （`data/model_manifest.json` 的 `training` / `eval` 仍为 null）。
-> 该配置已由 `scripts/check_deployment_config.py` 把关（权重必须存在且 SHA256 对得上），
-> 但在 provenance 补齐前，**它不是一个可复现的发布候选**。
+> **妯″瀷鐘舵€侊紙璇氬疄鏍囨敞锛屽嬁鎹瀹ｇО鍙鐜帮級**锛氳缁冪嚎鏄?**YOLO11s**
+> 锛坄backend/vision/train.py` 鐨?`DEFAULT_MODEL`锛夛紱鑰?`config/yolo_config.yaml`
+> 褰撳墠鎸囧悜鐨勬槸**鍘嗗彶鏉冮噸** `seabreeze_v3.pt`锛屽叾璁粌/璇勪及 provenance 灏氭湭鐧昏
+> 锛坄data/model_manifest.json` 鐨?`training` / `eval` 浠嶄负 null锛夈€?
+> 璇ラ厤缃凡鐢?`scripts/check_deployment_config.py` 鎶婂叧锛堟潈閲嶅繀椤诲瓨鍦ㄤ笖 SHA256 瀵瑰緱涓婏級锛?
+> 浣嗗湪 provenance 琛ラ綈鍓嶏紝**瀹冧笉鏄竴涓彲澶嶇幇鐨勫彂甯冨€欓€?*銆?
 
 ## Quick Start
 
@@ -67,7 +67,7 @@ python scripts/flash_firmware.py
 ### 4. Run Tests
 
 ```bash
-# Run all test suites (424 tests in 46 files)
+# Run all test suites (425 tests in 46 files)
 bash scripts/run_tests.sh      # Linux/macOS
 scripts\run_tests.bat          # Windows
 
@@ -96,7 +96,7 @@ offshore-wind-uav-arm/
 |-- firmware/              # Arduino servo controller
 |-- config/                # YAML configuration files
 |-- data/                  # Flight logs + datasets
-|-- tests/                 # Pytest suite (424 tests, 46 files)
+|-- tests/                 # Pytest suite (425 tests, 46 files)
 |-- scripts/               # Setup / flash / verification tools
 |-- docs/                  # Documentation + attic
 +-- seabreeze-3d-sim/      # Web 3D sim (Three.js, main demo)

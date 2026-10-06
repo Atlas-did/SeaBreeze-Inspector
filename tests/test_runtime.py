@@ -21,6 +21,48 @@ def _make_runtime():
     return SimRuntime(mc, quad, wind, arm, sensor)
 
 
+def _hover_wind_xy_err(cascade_ff, n=900, seed=11):
+    """起飞后在侧风下悬停，返回稳态 XY 误差均值（最后 300 步）。"""
+    np.random.seed(seed)
+    quad = Quadrotor3D()
+    wind = WindDisturbance(base_wind=np.array([0.05, 0.04, 0.0]), freq=0.3, gust_amp=0.02)
+    arm = RobotArm3DOF()
+    sensor = VirtualSensor()
+    mc = MissionController(mode='simulation', mock=True)
+    rt = SimRuntime(mc, quad, wind, arm, sensor, cascade_feedforward=cascade_ff)
+    mc.video_stream.stop()
+    mc.video_stream._running = False
+    for i in range(n):
+        rt.step(0.02, {'Space'} if i == 50 else set())
+    errs = []
+    tgt = np.array(mc.target_pos) / 100.0
+    for _ in range(300):
+        rt.step(0.02, set())
+        errs.append(float(np.linalg.norm(quad.get_position()[:2] - tgt[:2])))
+    return float(np.mean(errs))
+
+
+def test_feedforward_actually_reduces_wind_error():
+    """P0-1 回归：级联前馈必须真正作用于物理，并显著降低抗风稳态误差。
+
+    修复前：mc 的 PID+前馈输出被 update_with_external_data 每帧覆盖，
+    级联环不知道 d̂ 存在，开/关前馈轨迹逐位相同（评审实测 A==C）。
+    修复后：cascade_feedforward=True 时级联环吃掉 d̂ 做前馈抵消。
+
+    注：默认 cascade_feedforward=False 是刻意的 —— 本仓库硬要求"默认路径
+    逐位不变"（已发表数字来自默认路径），见 test_transport_model 的 golden 测试。
+    另注：风加速度若超过 MAX_ACCEL 会饱和，此时前馈收益甚微（物理边界），
+    故本测试选用不饱和的侧风。
+    """
+    err_off = _hover_wind_xy_err(False)
+    err_on = _hover_wind_xy_err(True)
+    assert err_on < err_off, (
+        "前馈接通后抗风误差应下降：off={:.4f} on={:.4f}".format(err_off, err_on))
+    reduction = (err_off - err_on) / max(err_off, 1e-9)
+    assert reduction > 0.20, (
+        "前馈应把抗风稳态误差降低 >20%，实测 {:.1f}%".format(reduction * 100))
+
+
 class TestSimRuntime:
     def test_initial_state_is_idle(self):
         rt = _make_runtime()
