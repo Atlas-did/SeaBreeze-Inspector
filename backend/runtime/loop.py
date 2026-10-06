@@ -490,12 +490,16 @@ class SimRuntime:
         if "KeyM" in keys and self.mc.state == "HOVERING":
             start_cm = m_to_cm(self.quad.get_position())
             target_cm = m_to_cm(TURBINE_POS)
-            # 设置直飞路径 (2 点), mc NAVIGATE 处理器会跟随并自动转 INSPECT
-            self.mc.path = np.array([start_cm, target_cm])
-            self.mc.path_idx = 0
-            if self.mc.request_state("NAVIGATE", "mission"):
+            # P0-5 修复 (2026-10-06 评审): 此前这里直接赋两点直线路径
+            #   self.mc.path = np.array([start_cm, target_cm])
+            # 导致 RRT* 规划器只被测试调用、演示路径根本不经过它。
+            # 改为走 mc.plan_path() → RRTStarPlanner.plan()，路径点 > 2 且可绕障。
+            # TODO(obstacles): 世界中加入障碍后，把障碍列表作为第 3 个参数传入。
+            if self.mc.plan_path(start_cm, target_cm):
                 self._mission_timer = 0.0
-                self._add_log("MISSION", "Navigating to turbine")
+                n_pts = 0 if self.mc.path is None else len(self.mc.path)
+                self._add_log("MISSION",
+                              "Navigating to turbine (RRT*: {} pts)".format(n_pts))
 
         # Arrow keys -> arm control
         delta = 3.0

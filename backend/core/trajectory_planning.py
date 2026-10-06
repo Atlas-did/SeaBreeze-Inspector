@@ -34,6 +34,7 @@ class RRTStarPlanner:
         search_radius: float = None,
         timeout: float = 5.0,
         collision_resolution: int = 5,
+        rng_seed: int = 20260831,
     ):
         """
         参数:
@@ -44,6 +45,7 @@ class RRTStarPlanner:
             search_radius: RRT*重连搜索半径 (None=自动)
             timeout: 超时时间 (秒)
             collision_resolution: 碰撞检测分辨率
+            rng_seed: 采样用随机源种子 (P0-3: 独立 Generator，不污染全局随机流)
         """
         if bounds is None:
             bounds = (np.array([-500, -500, 0]), np.array([500, 500, 300]))
@@ -55,6 +57,9 @@ class RRTStarPlanner:
         self.search_radius = search_radius or step_size * 3.0
         self.timeout = timeout
         self.collision_resolution = collision_resolution
+        # 独立随机源 (P0-3): RRT* 采样量大，绝不能共用全局 np.random，
+        # 否则会把仿真主循环的随机流搅乱、破坏可复现性。
+        self._rng = np.random.default_rng(rng_seed)
 
         # RRT树
         self.nodes: List[np.ndarray] = []
@@ -103,7 +108,7 @@ class RRTStarPlanner:
                 break
 
             # 1. 随机采样 (10%概率采样目标)
-            if np.random.random() < 0.1:
+            if self._rng.random() < 0.1:
                 sample = goal.copy()
             else:
                 sample = self._random_sample()
@@ -159,7 +164,7 @@ class RRTStarPlanner:
         return self._smooth_path(path, is_collision)
 
     def _random_sample(self) -> np.ndarray:
-        return np.random.uniform(self.bounds_min, self.bounds_max)
+        return self._rng.uniform(self.bounds_min, self.bounds_max)
 
     def _nearest(self, point: np.ndarray) -> int:
         """使用 cKDTree 做 O(log n) 最近邻查询"""

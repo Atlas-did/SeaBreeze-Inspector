@@ -16,6 +16,41 @@ from backend.drone.commands import run_altitude_hold
 from backend.simulation.altitude_driver import build_sim_driver
 
 
+def test_video_thread_does_not_perturb_sensor_determinism():
+    """P0-3 回归：视频线程运行时，同种子传感器读数必须逐位一致。
+
+    历史 bug：TelloVideoStream._capture_loop 用全局 np.random.randint 造帧，
+    与 VirtualSensor 的 np.random.normal 共用全局随机流 → 同种子两次跑结果不同
+    （实测最大差 9.05e-2 m）。修复：两者各持独立 Generator。
+    """
+    import numpy as np
+    from backend.drone.tello_video import TelloVideoStream
+    from backend.simulation.models import Quadrotor3D, VirtualSensor
+
+    def sensor_trace():
+        quad = Quadrotor3D()
+        vs = VirtualSensor(rng_seed=99)
+        out = []
+        for _ in range(40):
+            out.append(vs.read_imu(quad, dt=0.02).copy())
+        return np.array(out)
+
+    # A: 无视频线程
+    trace_a = sensor_trace()
+
+    # B: 起一个 mock 视频线程（它会大量消耗自己的随机源），再取同种子读数
+    stream = TelloVideoStream(mock=True, rng_seed=7)
+    stream.start()
+    try:
+        trace_b = sensor_trace()
+    finally:
+        stream.stop()
+
+    max_diff = float(np.max(np.abs(trace_a - trace_b)))
+    assert max_diff == 0.0, (
+        "视频线程污染了传感器随机流：同种子两次最大差 {:.3e}".format(max_diff))
+
+
 def test_altitude_hold_ideal_is_deterministic():
     """静风理想模型：同种子两次运行稳态误差一致（可复现性）。"""
     driver1 = build_sim_driver(calm=True)

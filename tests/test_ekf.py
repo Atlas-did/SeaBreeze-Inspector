@@ -345,11 +345,17 @@ def test_adaptive_Q_response():
 
     dt = 0.1
     rng = np.random.default_rng(42)  # fixed seed for determinism
+    # R 必须与本测试注入的噪声一致：下面 z[0] 注入 rng.normal(0, 5)，
+    # 即 IMU 观测噪声 std = 5 cm/s² → 方差 25。
+    # （默认 R 的 IMU 块为 625，对应含零偏/随机游走的 std≈25；若此处用默认值，
+    #  R 比注入噪声大 25 倍，扰动跳变就淹没在噪声假设里，自适应 Q 永不触发。）
+    R = np.diag([25.0, 25.0, 25.0, 4.0, 4.0, 100.0])
     ekf = DisturbanceObserverEKF(
         dt=dt,
         enable_adaptive=True,
         adaptive_threshold=12.59,
         adaptive_alpha=0.3,
+        R=R,
     )
 
     # Phase 1: normal disturbance (50 steps)
@@ -385,6 +391,50 @@ def test_adaptive_Q_response():
         "扰动突变后自适应Q应被激活"
 
     print("[PASS] 自适应Q响应测试通过")
+
+
+# =============================================================================
+# 回归测试：新息一致性（锁定 P0-2 R 矩阵单位口径）
+# =============================================================================
+
+def test_r_imu_block_is_cm_scale():
+    """R 的 IMU 块必须是 cm/s² 口径（方差量级 ≥100）。
+
+    回归守卫：历史 bug 是写了 0.0025 = (0.05 m/s²)² —— m/s² 的方差
+    放进 cm/s² 的矩阵，方差低估 1e4 倍、std 低估 100 倍，导致新息一致性崩坏。
+    """
+    ekf = DisturbanceObserverEKF(dt=0.1)
+    assert ekf.R[0, 0] >= 100.0, (
+        "R[0,0]={} 太小：疑似又用了 m/s² 口径的方差".format(ekf.R[0, 0]))
+    # 光流与气压块本来就是 cm 口径，做交叉确认
+    assert ekf.R[3, 3] == 4.0 and ekf.R[5, 5] == 100.0
+
+
+def test_innovation_consistency_chi2():
+    """新息应近似 χ²₆：用与 R 一致的噪声喂观测，D² 均值应落在合理带内。
+
+    这是 P0-2 的行为级回归——修复前 D² 均值 ~119（理论 6），修复后 ~8。
+    """
+    rng = np.random.default_rng(7)
+    dt = 0.1
+    # D² 由 _adaptive_Q_adjustment 记录，故需开启 adaptive（见 disturbance_observer.py）。
+    ekf = DisturbanceObserverEKF(dt=dt, enable_adaptive=True)
+    n = 400
+    d2 = []
+    for k in range(n):
+        z = np.zeros(6)
+        z[0] = 10.0 * np.sin(0.5 * k * dt) + rng.normal(0, 25.0)
+        z[3] = rng.normal(0, 2.0)
+        z[4] = rng.normal(0, 2.0)
+        z[5] = rng.normal(0, 10.0)
+        ekf.predict()
+        ekf.update(z)
+        if k >= 50:  # 跳过初始瞬态
+            d2.append(ekf._last_mahalanobis2)
+    mean_d2 = float(np.mean(d2))
+    assert mean_d2 < 30.0, (
+        "D² 均值 {:.1f} 过大，新息一致性不成立（理论 χ²₆ 均值 6）".format(mean_d2))
+    assert mean_d2 > 0.5, "D² 均值 {:.2f} 过小，疑似 R 被夸大".format(mean_d2)
 
 
 # =============================================================================

@@ -12,9 +12,14 @@ import numpy as np
 class TelloVideoStream:
     """Tello视频流, 生产者(抓帧线程) → Queue → 消费者(get_frame)"""
 
-    def __init__(self, tello_controller=None, mock: bool = False):
+    def __init__(self, tello_controller=None, mock: bool = False,
+                 rng_seed: int = 12345):
         self.tello = tello_controller
         self.mock = mock
+        # 独立随机源 (P0-3 修复): 视频线程绝不能使用全局 np.random，否则会与
+        # 仿真主循环 (VirtualSensor 的 np.random.normal) 争抢同一条随机流，
+        # 使同种子两次运行结果不一致（随线程时序漂移）。这里用自己的 Generator。
+        self._rng = np.random.default_rng(rng_seed)
         self._running = False
         self._thread: threading.Thread | None = None
         self._fps = 0.0
@@ -37,8 +42,8 @@ class TelloVideoStream:
         """生产者: 持续抓帧, 放入队列"""
         while self._running:
             if self.mock:
-                # 模拟帧: 640x480 随机色块
-                frame = np.random.randint(0, 255, (480, 640, 3), dtype=np.uint8)
+                # 模拟帧: 640x480 随机色块（用线程私有的 Generator，见 __init__）
+                frame = self._rng.integers(0, 255, (480, 640, 3), dtype=np.uint8)
                 self._enqueue_frame(frame)
                 time.sleep(1 / 30)
             elif self.tello and self.tello._tello:

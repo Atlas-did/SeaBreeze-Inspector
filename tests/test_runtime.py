@@ -92,7 +92,12 @@ class TestSimRuntime:
         assert data['state'] == 'HOVERING'
         rt.step(0.02, {'KeyM'})
         assert rt.mc.state == 'NAVIGATE'
-        for _ in range(400):
+        # P0-5 后 KeyM 走 RRT*（多点路径，含绕障采样），航程比原来的两点直线长，
+        # 因此步数预算需相应放宽。
+        assert rt.mc.path is not None and len(rt.mc.path) > 2, \
+            'KeyM 应经 RRT* 规划出多点路径，实际 {} 点'.format(
+                0 if rt.mc.path is None else len(rt.mc.path))
+        for _ in range(1500):
             data = rt.step(0.02, set())
             if data['state'] in ('INSPECT', 'RETURNING', 'LANDING', 'IDLE'):
                 break

@@ -299,7 +299,7 @@ class VirtualSensor:
 
     def __init__(self, imu_noise=0.05, opt_noise=2.0, bar_noise=10.0,
 
-                 bias_drift_rate=0.001, rw_std=0.005):
+                 bias_drift_rate=0.001, rw_std=0.005, rng_seed: int = 20260831):
 
         self.imu_noise = imu_noise       # m/s², 高斯噪声标准差
 
@@ -310,6 +310,10 @@ class VirtualSensor:
         self.bias_drift_rate = bias_drift_rate  # 零偏漂移率 (m/s² per step)
 
         self.rw_std = rw_std             # 随机游走标准差 (m/s²)
+
+        # 独立随机源 (P0-3 修复): 传感器噪声必须来自自有 Generator，不能用全局
+        # np.random —— 否则会被并发的视频线程抢走随机数，使同种子两次运行不一致。
+        self._rng = np.random.default_rng(rng_seed)
 
         # 内部状态
 
@@ -322,7 +326,7 @@ class VirtualSensor:
 
         # 零偏: 随机缓慢漂移
 
-        self._accel_bias += np.random.normal(0, self.bias_drift_rate, 3)
+        self._accel_bias += self._rng.normal(0, self.bias_drift_rate, 3)
 
         # 限幅: bias 不超过 0.2 m/s²
 
@@ -330,7 +334,7 @@ class VirtualSensor:
 
         # 随机游走: 白噪声积分
 
-        self._accel_rw += np.random.normal(0, self.rw_std, 3) * dt
+        self._accel_rw += self._rng.normal(0, self.rw_std, 3) * dt
 
         # 限幅: random walk 不超过 0.5 m/s²
 
@@ -345,7 +349,7 @@ class VirtualSensor:
 
         truth = quad.get_acceleration()
 
-        noise = (np.random.normal(0, self.imu_noise, 3) +
+        noise = (self._rng.normal(0, self.imu_noise, 3) +
 
                  self._accel_bias +
 
@@ -358,14 +362,14 @@ class VirtualSensor:
 
         from backend.utils.units import m_to_cm
 
-        return m_to_cm(quad.get_position()[:2]) + np.random.normal(0, self.opt_noise, 2)
+        return m_to_cm(quad.get_position()[:2]) + self._rng.normal(0, self.opt_noise, 2)
 
     def read_barometer(self, quad: Quadrotor3D):
         """读取气压计高度 (cm)"""
 
         from backend.utils.units import m_to_cm
 
-        return m_to_cm(quad.get_position()[2]) + np.random.normal(0, self.bar_noise)
+        return m_to_cm(quad.get_position()[2]) + self._rng.normal(0, self.bar_noise)
 
     def read_all(self, quad: Quadrotor3D):
         """读取全部传感器"""

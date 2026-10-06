@@ -67,7 +67,7 @@ python scripts/flash_firmware.py
 ### 4. Run Tests
 
 ```bash
-# Run all test suites (134 tests in 20 files)
+# Run all test suites (424 tests in 46 files)
 bash scripts/run_tests.sh      # Linux/macOS
 scripts\run_tests.bat          # Windows
 
@@ -96,7 +96,7 @@ offshore-wind-uav-arm/
 |-- firmware/              # Arduino servo controller
 |-- config/                # YAML configuration files
 |-- data/                  # Flight logs + datasets
-|-- tests/                 # Pytest suite (134 tests, 20 files)
+|-- tests/                 # Pytest suite (424 tests, 46 files)
 |-- scripts/               # Setup / flash / verification tools
 |-- docs/                  # Documentation + attic
 +-- seabreeze-3d-sim/      # Web 3D sim (Three.js, main demo)

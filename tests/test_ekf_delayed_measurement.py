@@ -163,9 +163,17 @@ def test_stale_measurement_does_not_pull_estimate_back_to_old_value():
     pull_stale = abs(stale.x[0] - ekf.x[0])
 
     assert pull_fresh > 50.0                 # 新鲜: 被显著拉回旧值
-    assert pull_stale < 1.0                  # 延迟: 几乎不动
+    # 阈值重标定 (2026-10-06, 随 P0-2 R 矩阵单位修复):
+    #   延迟抑制用的是 R_eff = R + Q_Δ(age)，是"相加"而非"相乘"。
+    #   修复前基础 R 的 IMU 块误为 0.0025（比真值小 1e4 倍），Q_Δ 完全主导，
+    #   R_scale 达 66×，陈旧测量几乎被无视（pull_stale≈0.5cm）。
+    #   修正 R=625 后基础 R 与 Q_Δ 同量级，R_scale 降到 ~4.5×，
+    #   陈旧测量仍保留约 5.7% 权重 —— 这是正确贝叶斯行为（总不确定度 =
+    #   测量噪声 + 延迟期间的过程漂移），不是回归。
+    #   故改为"相对压制"判据（与 R 的绝对尺度无关），并放宽绝对上限。
+    assert pull_stale < 10.0                 # 延迟: 影响被压到 10cm 以内
     assert stale.x[0] > fresh.x[0] + 50.0    # 方向: 延迟结果留在当前值一侧
-    assert pull_stale < 0.02 * pull_fresh    # 影响被压到 2% 以下
+    assert pull_stale < 0.10 * pull_fresh    # 相对: 影响被压到 10% 以下
 
 
 def test_extreme_age_is_finite_and_correction_vanishes():

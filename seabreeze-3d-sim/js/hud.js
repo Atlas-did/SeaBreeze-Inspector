@@ -197,15 +197,10 @@ export class HUD {
     const dist = data.pos ? Math.hypot(data.pos[0] - t[0], data.pos[1] - t[1]) : 999;
     const isClose = (data.state === 'HOVERING' || data.state === 'INSPECT' || data.state === 'NAVIGATE') && dist < CFG.DETECTION_RANGE;
 
-    // Detections: prefer backend, fallback to mock
-    let dets = (data.detections && data.detections.length > 0) ? data.detections : null;
-    if (!dets && isClose) {
-      dets = [
-        { cls: 'crack', conf: 0.82, bbox: [120, 50, 40, 20] },
-        { cls: 'corrosion', conf: 0.71, bbox: [160, 100, 50, 25] },
-      ];
-      if (dist < 8) dets.push({ cls: 'rust', conf: 0.65, bbox: [140, 150, 35, 18] });
-    }
+    // Detections: 只认后端数据；后端没给就什么都不画（else 分支显示 "No targets"）。
+    // 历史 bug（2026-10-06 评审 P0-4）：此处曾在 !dets && isClose 时凭空生成
+    // crack 0.82 / corrosion 0.71 / rust 0.65，演示与答辩会显示根本不存在的缺陷。
+    const dets = (data.detections && data.detections.length > 0) ? data.detections : null;
 
     // Turbine silhouette when close
     if (isClose) {
