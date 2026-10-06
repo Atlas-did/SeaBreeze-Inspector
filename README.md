@@ -11,9 +11,9 @@
 
 This project proposes an intelligent inspection solution combining a UAV with a 3-DOF lightweight robotic arm. Using a DJI Tello drone, it achieves autonomous flight, stable hovering, and defect identification on wind turbine towers through:
 
-- **Disturbance Observer (12-state EKF)** — estimates and compensates for wind disturbances
-- **Feedforward PID Controller** — disturbance-aware position control
-- **RRT\* Path Planning** — 3D obstacle-aware trajectory generation
+- **Disturbance Observer (12-state EKF)** — estimates wind disturbances; innovation is χ²₆-consistent (D² test)
+- **Feedforward PID Controller** — disturbance-aware position control (feedforward into the physics loop is **opt-in**: `cascade_feedforward=True`; measured −80.6% wind-hover error — see the drive-mode note below)
+- **RRT\* Path Planning** — 3D obstacle-aware trajectory generation (wired into the demo mission key `M`)
 - **Defect Detection (YOLO11s training line)** — real-time crack/corrosion/damage detection
 
 ## Tech Stack
